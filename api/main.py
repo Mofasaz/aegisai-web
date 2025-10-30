@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from api.models import *
 from api.chains import get_llm
 from rules.engine import analyze_events
-from retrieval.local_retriever import get_chunks
+from retrieval.azure_retriever import get_chunks
 from datetime import datetime, timezone
 
 app = FastAPI(title="AegisAI")
@@ -61,3 +61,4 @@ def push_anomalies(req: AnomalyPushRequest):
 
 
  
+
