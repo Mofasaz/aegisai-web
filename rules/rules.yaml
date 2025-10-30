@@ -1,0 +1,183 @@
+meta:
+  version: 2
+  score_weights:
+    # identity / access
+    login_failed_off_hours: 35
+    login_failed_burst_risk: 20
+    access_denied_failed: 35
+    session_timeout_after_long_shift: 20
+
+    # sensitive systems / roles
+    flight_ops_by_ground_or_agent: 30
+    crew_portal_overnight_fail: 25
+    hr_delete_sensitive: 40
+    cargo_large_transfer: 25
+    data_export_off_hours: 25
+
+    # context
+    off_hours_activity: 15
+    geo_mia_off_hours: 15
+
+    # de-bias benign ops (negative weight lowers risk)
+    benign_security_scan: -20
+
+rules:
+  # --- Identity & Access ---
+  - id: login_failed_off_hours
+    description: "Login failed during off-hours"
+    when:
+      all:
+        - field: action
+          op: equals
+          value: login
+        - field: status
+          op: equals
+          value: failed
+        - field: timestamp
+          op: between_hours
+          value: [22, 5]
+    explain: "Failed login occurred during off-hours"
+
+  - id: login_failed_burst_risk
+    description: "User has a recent history of failed logins"
+    when:
+      all:
+        - field: action
+          op: equals
+          value: login
+        - field: status
+          op: equals
+          value: failed
+        - field: risk_context.last_30d_failed_logins
+          op: gte
+          value: 3
+    explain: "Recent failed-login history increases risk"
+
+  - id: access_denied_failed
+    description: "Access denied event (failed)"
+    when:
+      all:
+        - field: action
+          op: equals
+          value: access_denied
+        - field: status
+          op: equals
+          value: failed
+    explain: "Access denied recorded for user"
+
+  - id: session_timeout_after_long_shift
+    description: "Session timeout after long shift (fatigue)"
+    when:
+      all:
+        - field: action
+          op: equals
+          value: session_timeout
+        - field: risk_context.shift_hours
+          op: gte
+          value: 9
+    explain: "Session timed out after extended shift (possible fatigue)"
+
+  # --- Sensitive Systems & Roles ---
+  - id: flight_ops_by_ground_or_agent
+    description: "Flight Operations Portal touched by Ground Staff or Travel Agent"
+    when:
+      all:
+        - field: system
+          op: regex
+          value: "(?i)flight operations portal"
+        - field: role
+          op: regex
+          value: "(?i)(ground staff|travel agent)"
+    explain: "Sensitive Flight Ops access by non-operational role"
+
+  - id: crew_portal_overnight_fail
+    description: "Crew Scheduling Portal failures overnight"
+    when:
+      all:
+        - field: system
+          op: regex
+          value: "(?i)crew scheduling portal"
+        - field: status
+          op: equals
+          value: failed
+        - field: timestamp
+          op: between_hours
+          value: [22, 5]
+    explain: "Crew Scheduling failure occurred overnight"
+
+  - id: hr_delete_sensitive
+    description: "HR Manager deleting data in Employee Records"
+    when:
+      all:
+        - field: system
+          op: regex
+          value: "(?i)employee records database"
+        - field: role
+          op: regex
+          value: "(?i)hr manager"
+        - field: action
+          op: in_set
+          value: ["data_delete"]
+    explain: "Sensitive delete in HR records by HR Manager"
+
+  - id: cargo_large_transfer
+    description: "Cargo system file transfer/upload (treat as sensitive)"
+    when:
+      all:
+        - field: system
+          op: regex
+          value: "(?i)cargo (management|tracking) system"
+        - field: action
+          op: in_set
+          value: ["file_transfer","file_upload","data_export"]
+    explain: "Cargo data movement detected"
+
+  - id: data_export_off_hours
+    description: "Data export during off-hours"
+    when:
+      all:
+        - field: action
+          op: equals
+          value: data_export
+        - field: timestamp
+          op: between_hours
+          value: [22, 5]
+    explain: "Data export performed during off-hours"
+
+  # --- Contextual modifiers ---
+  - id: off_hours_activity
+    description: "Any activity during off-hours window"
+    when:
+      any:
+        - field: timestamp
+          op: between_hours
+          value: [22, 5]
+    explain: "Action took place during off-hours"
+
+  - id: geo_mia_off_hours
+    description: "MIA-specific off-hours activity"
+    when:
+      all:
+        - field: location
+          op: equals
+          value: MIA
+        - field: timestamp
+          op: between_hours
+          value: [22, 5]
+    explain: "MIA activity during off-hours window"
+
+  # --- De-bias benign security operations ---
+  - id: benign_security_scan
+    description: "Known security scan by Security Analyst"
+    when:
+      all:
+        - field: action
+          op: in_set
+          value: ["security_scan","software_update"]
+        - field: role
+          op: regex
+          value: "(?i)(security analyst|it admin)"
+        - field: status
+          op: equals
+          value: success
+    explain: "Benign security/maintenance operation"

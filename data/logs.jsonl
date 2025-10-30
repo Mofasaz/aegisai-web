@@ -1,0 +1,307 @@
+{
+    "event_id": "mockEK001",
+    "timestamp": "2025-10-23T01:30:00+04:00",
+    "action": "login",
+    "user_role": "Cabin Crew",
+    "system": "Crew Scheduling Portal",
+    "location": "DXB",
+    "status": "failed",
+    "risk_context": { "shift_hours": 11, "last_30d_failed_logins": 2 }
+}
+{
+    "event_id": "mockEK002",
+    "timestamp": "2025-10-23T09:15:00+04:00",
+    "action": "data_access",
+    "user_role": "HR Manager",
+    "system": "Employee Records Database",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 3, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK003",
+    "timestamp": "2025-10-23T14:22:00+04:00",
+    "action": "file_transfer",
+    "user_role": "IT Admin",
+    "system": "Cargo Management System",
+    "location": "LHR",
+    "status": "success",
+    "risk_context": { "shift_hours": 6, "last_30d_failed_logins": 1 }
+}
+{
+    "event_id": "mockEK004",
+    "timestamp": "2025-10-23T23:45:00+04:00",
+    "action": "login",
+    "user_role": "Ground Staff",
+    "system": "Crew Scheduling Portal",
+    "location": "DXB",
+    "status": "failed",
+    "risk_context": { "shift_hours": 12, "last_30d_failed_logins": 3 }
+}
+{
+    "event_id": "mockEK005",
+    "timestamp": "2025-10-24T03:10:00+04:00",
+    "action": "password_reset",
+    "user_role": "Pilot",
+    "system": "Flight Operations Portal",
+    "location": "JFK",
+    "status": "success",
+    "risk_context": { "shift_hours": 1, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK006",
+    "timestamp": "2025-10-24T07:50:00+04:00",
+    "action": "data_access",
+    "user_role": "Security Analyst",
+    "system": "Access Control Logs",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 4, "last_30d_failed_logins": 1 }
+}
+{
+    "event_id": "mockEK007",
+    "timestamp": "2025-10-24T12:30:00+04:00",
+    "action": "logout",
+    "user_role": "Cabin Crew",
+    "system": "Crew Scheduling Portal",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 8, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK008",
+    "timestamp": "2025-10-24T15:40:00+04:00",
+    "action": "data_download",
+    "user_role": "HR Manager",
+    "system": "Payroll System",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 6, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK009",
+    "timestamp": "2025-10-24T18:20:00+04:00",
+    "action": "login",
+    "user_role": "IT Admin",
+    "system": "Network Monitoring Tool",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 2, "last_30d_failed_logins": 1 }
+}
+{
+    "event_id": "mockEK010",
+    "timestamp": "2025-10-24T22:10:00+04:00",
+    "action": "access_denied",
+    "user_role": "Ground Staff",
+    "system": "Flight Operations Portal",
+    "location": "SIN",
+    "status": "failed",
+    "risk_context": { "shift_hours": 10, "last_30d_failed_logins": 4 }
+}
+{
+    "event_id": "mockEK011",
+    "timestamp": "2025-10-25T02:00:00+04:00",
+    "action": "login",
+    "user_role": "Pilot",
+    "system": "Flight Operations Portal",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 1, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK012",
+    "timestamp": "2025-10-25T04:25:00+04:00",
+    "action": "file_upload",
+    "user_role": "Cargo Supervisor",
+    "system": "Cargo Management System",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 3, "last_30d_failed_logins": 1 }
+}
+{
+    "event_id": "mockEK013",
+    "timestamp": "2025-10-25T06:15:00+04:00",
+    "action": "login",
+    "user_role": "Cabin Crew",
+    "system": "Crew Scheduling Portal",
+    "location": "LAX",
+    "status": "failed",
+    "risk_context": { "shift_hours": 13, "last_30d_failed_logins": 2 }
+}
+{
+    "event_id": "mockEK014",
+    "timestamp": "2025-10-25T09:00:00+04:00",
+    "action": "data_access",
+    "user_role": "Security Analyst",
+    "system": "Compliance Monitoring System",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 5, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK015",
+    "timestamp": "2025-10-25T11:30:00+04:00",
+    "action": "session_timeout",
+    "user_role": "HR Manager",
+    "system": "Employee Records Database",
+    "location": "DXB",
+    "status": "failed",
+    "risk_context": { "shift_hours": 9, "last_30d_failed_logins": 1 }
+}
+{
+    "event_id": "mockEK016",
+    "timestamp": "2025-10-24T21:00:00+04:00",
+    "action": "vpn_connect",
+    "user_role": "IT Support",
+    "system": "Corporate VPN",
+    "location": "SYD",
+    "status": "success",
+    "risk_context": { "shift_hours": 2, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK017",
+    "timestamp": "2025-10-24T22:15:00+04:00",
+    "action": "data_export",
+    "user_role": "Cargo Manager",
+    "system": "Cargo Tracking System",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 7, "last_30d_failed_logins": 1 }
+}
+{
+    "event_id": "mockEK018",
+    "timestamp": "2025-10-24T23:30:00+04:00",
+    "action": "login",
+    "user_role": "Maintenance Engineer",
+    "system": "Aircraft Maintenance Portal",
+    "location": "DXB",
+    "status": "failed",
+    "risk_context": { "shift_hours": 11, "last_30d_failed_logins": 3 }
+}
+{
+    "event_id": "mockEK019",
+    "timestamp": "2025-10-25T00:45:00+04:00",
+    "action": "security_scan",
+    "user_role": "Security Analyst",
+    "system": "Network Security Dashboard",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 2, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK020",
+    "timestamp": "2025-10-25T02:20:00+04:00",
+    "action": "profile_update",
+    "user_role": "HR Coordinator",
+    "system": "Employee Self-Service Portal",
+    "location": "LHR",
+    "status": "success",
+    "risk_context": { "shift_hours": 4, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK021",
+    "timestamp": "2025-10-25T03:10:00+04:00",
+    "action": "access_denied",
+    "user_role": "Ground Staff",
+    "system": "Payroll System",
+    "location": "JFK",
+    "status": "failed",
+    "risk_context": { "shift_hours": 8, "last_30d_failed_logins": 4 }
+}
+{
+    "event_id": "mockEK022",
+    "timestamp": "2025-10-25T05:30:00+04:00",
+    "action": "software_update",
+    "user_role": "IT Admin",
+    "system": "Flight Operations Portal",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 6, "last_30d_failed_logins": 1 }
+}
+{
+    "event_id": "mockEK023",
+    "timestamp": "2025-10-25T07:45:00+04:00",
+    "action": "login",
+    "user_role": "Pilot",
+    "system": "Flight Planning System",
+    "location": "CDG",
+    "status": "success",
+    "risk_context": { "shift_hours": 1, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK024",
+    "timestamp": "2025-10-25T09:20:00+04:00",
+    "action": "data_access",
+    "user_role": "Travel Agent",
+    "system": "Booking Management System",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 5, "last_30d_failed_logins": 2 }
+}
+{
+    "event_id": "mockEK025",
+    "timestamp": "2025-10-25T10:15:00+04:00",
+    "action": "logout",
+    "user_role": "Cabin Crew",
+    "system": "Crew Scheduling Portal",
+    "location": "BKK",
+    "status": "success",
+    "risk_context": { "shift_hours": 7, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK026",
+    "timestamp": "2025-10-25T11:00:00+04:00",
+    "action": "file_upload",
+    "user_role": "Maintenance Engineer",
+    "system": "Aircraft Maintenance Portal",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 3, "last_30d_failed_logins": 1 }
+}
+{
+    "event_id": "mockEK027",
+    "timestamp": "2025-10-25T12:30:00+04:00",
+    "action": "login",
+    "user_role": "Cargo Supervisor",
+    "system": "Cargo Tracking System",
+    "location": "FRA",
+    "status": "failed",
+    "risk_context": { "shift_hours": 9, "last_30d_failed_logins": 2 }
+}
+{
+    "event_id": "mockEK028",
+    "timestamp": "2025-10-25T14:00:00+04:00",
+    "action": "data_delete",
+    "user_role": "HR Manager",
+    "system": "Employee Records Database",
+    "location": "DXB",
+    "status": "success",
+    "risk_context": { "shift_hours": 6, "last_30d_failed_logins": 0 }
+}
+{
+    "event_id": "mockEK029",
+    "timestamp": "2025-10-25T15:45:00+04:00",
+    "action": "session_timeout",
+    "user_role": "IT Support",
+    "system": "Network Monitoring Tool",
+    "location": "DXB",
+    "status": "failed",
+    "risk_context": { "shift_hours": 10, "last_30d_failed_logins": 2 }
+}
+{
+    "event_id": "mockEK030",
+    "timestamp": "2025-10-25T17:20:00+04:00",
+    "action": "access_denied",
+    "user_role": "Travel Agent",
+    "system": "Flight Operations Portal",
+    "location": "MIA",
+    "status": "failed",
+    "risk_context": { "shift_hours": 12, "last_30d_failed_logins": 3 }
+}
+{
+    "event_id":"E-0007",
+    "role":"Scheduler",
+    "timestamp":"2025-10-23T21:47:02Z",
+    "action":"email_send",
+    "risk_context":{"shift_hours":13,"last_30d_failed_logins":4}
+}

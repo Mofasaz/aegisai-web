@@ -1,0 +1,152 @@
+{
+    "policy_id":"POL-HR-001",
+    "title":"Data Handling",
+    "section":"External Sharing",
+    "clause_id":"DH-EXT-03",
+    "chunk_text":"Crew schedules must not be emailed to external domains or personal mailboxes.",
+    "tags":["email","crew","external"],
+    "visibility":"restricted",
+    "allowed_grades":["EK.09","EK.10"]
+}
+
+{
+    "policy_id":"POL-IT-004",
+    "title":"Access Control",
+    "section":"Privileged Access",
+    "clause_id":"AC-PRIV-02",
+    "chunk_text":"Privilege escalations require approval and must not coincide with failed login spikes.",
+    "tags":["privilege","access"],
+    "visibility":"public",
+    "allowed_grades":[]}
+
+{
+    "policy_id": "EK-IT-001",
+    "title": "Crew Scheduling Portal Access Restriction",
+    "section": "IT Access",
+    "clause_id": "IT-001-01",
+    "clause_text": "Cabin Crew may not access the Crew Scheduling Portal outside 05:00–23:00 GST.",
+    "tags": ["crew", "system-access", "scheduling"],
+    "visibility": "restricted",
+    "allowed_grades": ["FD", "EK.09", "IT.06"]
+  }
+  
+  {
+    "policy_id": "EK-HR-001",
+    "title": "Crew Rest Period Compliance",
+    "section": "Crew Compliance",
+    "clause_id": "HR-001-01",
+    "clause_text": "All crew members must complete mandatory rest periods as per GCAA regulations before accessing scheduling systems.",
+    "tags": ["crew", "compliance", "regulatory"],
+    "visibility": "restricted",
+    "allowed_grades": ["FD", "EK.09", "EK.10"]
+  }
+  
+  {
+    "policy_id": "EK-SEC-001",
+    "title": "Flight Operations Portal Security",
+    "section": "Security Monitoring",
+    "clause_id": "SEC-001-01",
+    "clause_text": "Unauthorized access attempts to the Flight Operations Portal must trigger an immediate security alert and account lockout after 3 failed attempts.",
+    "tags": ["security", "system-access", "monitoring"],
+    "visibility": "restricted",
+    "allowed_grades": ["IT.07", "EK.09", "IT.08"]
+  }
+  
+  {
+    "policy_id": "EK-IT-002",
+    "title": "Payroll System Data Download Control",
+    "section": "Data Access",
+    "clause_id": "IT-002-01",
+    "clause_text": "Data downloads from the Payroll System are restricted to HR Managers and must be logged with a timestamp and user ID.",
+    "tags": ["data-handling", "payroll", "compliance"],
+    "visibility": "restricted",
+    "allowed_grades": ["EK.09", "EK.10"]
+  }
+  
+  {
+    "policy_id": "EK-HR-002",
+    "title": "Employee Records Access Control",
+    "section": "HR Data Access",
+    "clause_id": "HR-002-01",
+    "clause_text": "Employee records in the Employee Records Database can only be accessed by HR personnel with valid credentials during business hours (08:00–18:00 GST).",
+    "tags": ["data-handling", "employee-records", "access-control"],
+    "visibility": "restricted",
+    "allowed_grades": ["HR Manager", "HR Coordinator"]
+  }
+  
+  {
+    "policy_id": "EK-IT-003",
+    "title": "Flight Operations Software Update Protocol",
+    "section": "System Maintenance",
+    "clause_id": "IT-003-01",
+    "clause_text": "Only IT Admins with elevated privileges can perform software updates on the Flight Operations Portal, and updates must be logged with a change request ID.",
+    "tags": ["system-maintenance", "flight-operations", "admin-access"],
+    "visibility": "restricted",
+    "allowed_grades": ["IT.06", "IT.07"]
+  }
+  
+  {
+    "policy_id": "EK-HR-003",
+    "title": "Pilot Certification Update Requirement",
+    "section": "Crew Compliance",
+    "clause_id": "HR-003-01",
+    "clause_text": "Pilots must update their flight certifications in the Employee Self-Service Portal at least 48 hours before their next scheduled flight.",
+    "tags": ["crew", "compliance", "certification"],
+    "visibility": "restricted",
+    "allowed_grades": ["Pilot", "HR Manager"]
+  }
+  
+  {
+    "policy_id": "EK-SEC-002",
+    "title": "VPN Security for Non-UAE Access",
+    "section": "Network Security",
+    "clause_id": "SEC-002-01",
+    "clause_text": "All VPN connections from non-UAE locations must use multi-factor authentication and be monitored for unusual activity.",
+    "tags": ["security", "external", "network-access"],
+    "visibility": "restricted",
+    "allowed_grades": ["IT.06", "IT.07", "EK.07", "EK.08"]
+  }
+  
+  {
+    "policy_id": "EK-IT-004",
+    "title": "Cargo Tracking System Access and Export",
+    "section": "Data Access",
+    "clause_id": "IT-004-01",
+    "clause_text": "Access to the Cargo Tracking System is restricted to Cargo Managers and Supervisors, with all data exports requiring approval from a department head.",
+    "tags": ["data-handling", "cargo", "approval"],
+    "visibility": "restricted",
+    "allowed_grades": ["EK.09", "EK.08"]
+  }
+  
+  {
+    "policy_id": "EK-HR-004",
+    "title": "Employee Records Deletion Protocol",
+    "section": "HR Data Management",
+    "clause_id": "HR-004-01",
+    "clause_text": "Data deletion in the Employee Records Database is restricted to HR Managers and requires a secondary approval from a senior HR officer.",
+    "tags": ["data-handling", "employee-records", "compliance"],
+    "visibility": "restricted",
+    "allowed_grades": ["EK.09", "EK.08"]
+  }
+  
+  {
+    "policy_id": "EK-SEC-003",
+    "title": "Network Security Scan Scheduling",
+    "section": "Security Operations",
+    "clause_id": "SEC-003-01",
+    "clause_text": "All security scans on the Network Security Dashboard must be scheduled during non-peak hours (00:00–04:00 GST) to avoid system performance degradation.",
+    "tags": ["security", "network-monitoring", "scheduling"],
+    "visibility": "restricted",
+    "allowed_grades": ["EK.06", "EK.07", "IT.07"]
+  }
+  
+  {
+    "policy_id": "EK-IT-005",
+    "title": "Booking System Security for Travel Agents",
+    "section": "System Access",
+    "clause_id": "IT-005-01",
+    "clause_text": "Travel Agents accessing the Booking Management System must use encrypted connections, and sessions will auto-terminate after 15 minutes of inactivity.",
+    "tags": ["external", "system-access", "encryption"],
+    "visibility": "restricted",
+    "allowed_grades": ["EK.06", "EK.07"]
+  }
