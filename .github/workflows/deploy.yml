@@ -1,0 +1,47 @@
+name: Deploy AegisAI to Azure Web App (Python 3.11)
+
+on:
+  push:
+    branches: [ "main" ]   # change if you deploy from a different branch
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Optional: make sure the tree is what we expect
+      - name: List files (debug)
+        run: ls -la
+
+      # Optional build sanity: install deps & (optionally) run tests
+      # (Not required for deployment; Azure Oryx will also install from requirements.txt)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies (optional)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # pytest  # uncomment if you add tests
+
+      # Deploy the repo to Azure Web App.
+      # The action zips the repo (excluding .git) and uploads.
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: "aegisai-web-REPLACE_ME"  # <-- your Web App name
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
