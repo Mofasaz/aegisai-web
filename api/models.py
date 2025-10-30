@@ -13,6 +13,7 @@ class Citation(BaseModel):
     section: Optional[str] = None
     visibility: Optional[str] = None
     allowed_grades: Optional[List[str]] = None
+    model_config = dict(populate_by_name=True)
 
 class AskResponse(BaseModel):
     answer: str
@@ -114,6 +115,7 @@ class AnomalyPushRequest(BaseModel):
 class AnomalyPushResponse(BaseModel):
     status: str
     count: int
+
 
 
 
