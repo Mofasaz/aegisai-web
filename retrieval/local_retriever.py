@@ -25,8 +25,9 @@ def get_chunks(query: str, user_grade: Optional[str]) -> List[Dict]:
     for r in POLICIES:
         if not allowed(r):
             continue
-        text = (r.get("chunk_text","" ) + " " + " ".join(r.get("tags",[]))).lower()
+        text = (r.get("clause_text","" ) + " " + " ".join(r.get("tags",[]))).lower()
         score = sum(1 for tok in q.split() if tok in text)
         if score > 0: scored.append((score, r))
     scored.sort(key=lambda x: x[0], reverse=True)
     return [r for _, r in scored[:5]]
+
