@@ -9,10 +9,10 @@ class AskRequest(BaseModel):
 class Citation(BaseModel):
     policy_id: str
     clause_id: str
-    title: Optional[str] = None
+    title: Optional[str] | None = Field(default=None, alias="title_Data_Column")
     section: Optional[str] = None
     visibility: Optional[str] = None
-    allowed_grade: Optional[List[str]] = None
+    allowed_grades: Optional[List[str]] = None
 
 class AskResponse(BaseModel):
     answer: str
@@ -114,6 +114,7 @@ class AnomalyPushRequest(BaseModel):
 class AnomalyPushResponse(BaseModel):
     status: str
     count: int
+
 
 
 
