@@ -1,7 +1,9 @@
-fastapi
-uvicorn
-pydantic
-pyyaml
-langchain
-langchain-openai
-requests
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+gunicorn==22.0.0
+pydantic==2.9.2
+pyyaml==6.0.2
+requests==2.32.3
+# If using Azure services in CHAIN_MODE=azure:
+azure-search-documents==11.6.0b8
+openai==1.51.0
