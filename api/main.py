@@ -20,7 +20,7 @@ def ask(req: AskRequest):
     chunks = get_chunks(req.query, req.user_grade)
     if not chunks:
         return AskResponse(answer="No matching policy content found.", citations=[])
-    ctx = "\n\n".join([f"[{c['policy_id']}/{c['clause_id']}] {c['chunk_text']}" for c in chunks])
+    ctx = "\n\n".join([f"[{c['policy_id']}/{c['clause_id']}] {c['clause_text']}" for c in chunks])
     llm = get_llm()
     msg = [
         {"role":"system","content":"Answer ONLY from provided policy context. Cite clause IDs."},
@@ -58,5 +58,6 @@ def attest(req: AttestRequest):
 def push_anomalies(req: AnomalyPushRequest):
     # offline: stubbed success; Azure phase uses powerbi.push_rows
     return AnomalyPushResponse(status="ok", count=len(req.items))
+
 
  
