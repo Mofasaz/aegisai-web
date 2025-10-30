@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pyDantic import BaseModel, Field
+from pydantic import BaseModel, Field
 
 # /ask
 class AskRequest(BaseModel):
@@ -114,5 +114,6 @@ class AnomalyPushRequest(BaseModel):
 class AnomalyPushResponse(BaseModel):
     status: str
     count: int
+
 
 
