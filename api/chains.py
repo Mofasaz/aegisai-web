@@ -12,7 +12,7 @@ class MockLLM:
         return MockResponse(f"[MOCK ANSWER] {user}")
 
 def get_llm():
-    mode = os.getenv("CHAIN_MODE", "offline")
+    mode = os.getenv("CHAIN_MODE", "azure")
     if mode == "offline":
         return MockLLM()
     else:
@@ -23,4 +23,5 @@ def get_llm():
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-06-01"),
             temperature=0.2,
         )
+
 
