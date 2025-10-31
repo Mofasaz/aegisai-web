@@ -1,15 +1,23 @@
 # rules/intent.py
 import re
-
+    
 # Add/adjust patterns as you wish. They are matched case-insensitively.
 RISKY_PATTERNS = [
     r"\bemail\b.*\b(crew|roster|schedules)\b.*\b(external|outside|gmail|yahoo|personal)\b",
     r"\bshare\b.*\b(payroll|salary|pii|passport|visa)\b",
     r"\bdownload\b.*\b(employee\s*records|confidential|restricted)\b",
     r"\bexport\b.*\b(hr|crew|employee|payroll|confidential)\b",
+    r"\bemail\b.*\bextern(al|ally)\b",
+    r"\bexport\b.*\b(pi|p\.i\.|personal)\b",
+    r"\bcrew\s*schedules?\b.*\boutside\b",
+    r"\bcredential(s)?\b.*\bshare\b",
+    r"\bdata\b.*\b(exfil|transfer|leak)\b",
+    r"\badmin\b.*\b(escalate|privilege)\b",
 ]
 
 def match_risky_intent(q: str) -> str | None:
+    if not q:
+        return None
     for pat in RISKY_PATTERNS:
         if re.search(pat, q, flags=re.IGNORECASE):
             return pat
