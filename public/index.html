@@ -171,6 +171,30 @@
         </div>
       </div>
 
+      <!-- Propose Rule panel -->
+      <div class="panel" style="margin-top:16px;">
+        <div class="sectionTitle">
+          <h3>Propose Rule</h3>
+          <span class="small">Turn natural language into a YAML rule, then approve.</span>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <textarea id="rulePrompt" rows="3" placeholder="Describe the rule you want (e.g., 'Flag off-hour access to Crew Scheduling Portal by Cabin Crew with >10 shift hours and >2 failed logins in last 30 days')"></textarea>
+        </div>
+        <div class="row" style="gap:8px;">
+          <input id="ruleCategory" placeholder="Category (optional, e.g., access/auth/download)" style="flex:1;" />
+          <input id="ruleSeverity" placeholder="Severity (optional, e.g., high)" style="flex:1;" />
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button id="btnSuggest">Suggest YAML</button>
+          <button id="btnApply" disabled>Approve & Save</button>
+          <span id="ruleStatus" class="small"></span>
+        </div>
+        <div class="card" style="margin-top:10px;">
+          <div class="small" style="opacity:.85; margin-bottom:6px;">Suggested YAML</div>
+          <pre id="rulePreview" style="min-height:96px;"></pre>
+        </div>
+      </div>
+
       <!-- Results grid -->
       <div class="grid" style="margin-top:16px;">
         <!-- LEFT: Answer & Meta -->
@@ -427,7 +451,70 @@
       document.getElementById('q').addEventListener('keydown', (ev)=>{
         if(ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)){ doAsk(); }
       });
+
+      async function doSuggestRule(){
+        const status = el('ruleStatus');
+        const preview = el('rulePreview');
+        status.textContent = 'Generating…';
+        el('btnApply').disabled = true;
+      
+        const payload = {
+          prompt: el('rulePrompt').value.trim(),
+          category: el('ruleCategory').value.trim() || null,
+          severity: el('ruleSeverity').value.trim() || null,
+        };
+        if (!payload.prompt){
+          status.textContent = 'Please enter a natural language rule.';
+          return;
+        }
+      
+        try{
+          const res = await fetch(`${API}/rules/suggest`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if(!res.ok){ throw new Error(data.detail || `HTTP ${res.status}`); }
+          preview.textContent = data.yaml || '';
+          status.textContent = (data.warnings && data.warnings.length)
+            ? `Suggested (with warnings: ${data.warnings.join('; ')})`
+            : 'Suggested';
+          el('btnApply').disabled = !data.yaml;
+        }catch(e){
+          status.textContent = `Error: ${String(e)}`;
+          preview.textContent = '';
+          el('btnApply').disabled = true;
+        }
+      }
+      
+      async function doApplyRule(){
+        const status = el('ruleStatus');
+        const yaml = el('rulePreview').textContent.trim();
+        if (!yaml){
+          status.textContent = 'No YAML to apply.';
+          return;
+        }
+        status.textContent = 'Saving…';
+        try{
+          const res = await fetch(`${API}/rules/apply`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ yaml })
+          });
+          const data = await res.json();
+          if(!res.ok){ throw new Error(data.detail || `HTTP ${res.status}`); }
+          status.textContent = `Saved: ${data.message || 'ok'}`;
+          // Optionally, refresh rules engine in-memory if you cache rules
+        }catch(e){
+          status.textContent = `Error: ${String(e)}`;
+        }
+      }
+      
+      document.getElementById('btnSuggest').addEventListener('click', doSuggestRule);
+      document.getElementById('btnApply').addEventListener('click', doApplyRule);
     </script>
   </body>
 </html>
+
 
