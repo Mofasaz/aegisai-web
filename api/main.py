@@ -10,6 +10,7 @@ from retrieval.azure_retriever import get_chunks
 from datetime import datetime, timezone
 
 app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
+USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
 
 @app.get("/healthz")
 def healthz():
@@ -17,19 +18,26 @@ def healthz():
 
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
-    # offline: local retriever; azure phase swaps to Azure Search
-    chunks = get_chunks(req.query, req.user_grade)
-    if not chunks:
-        return AskResponse(answer="No matching policy content found.", citations=[])
-    ctx = "\n\n".join([f"[{c['policy_id']}/{c['clause_id']}] {c['clause_text']}" for c in chunks])
-    llm = get_llm()
-    msg = [
-        {"role":"system","content":"Answer ONLY from provided policy context. Cite clause IDs."},
-        {"role":"user","content": f"Q: {req.query}\n\nContext:\n{ctx}"}
-    ]
-    out = llm.invoke(msg)
-    citations = [Citation(**{k:v for k,v in c.items() if k in {"policy_id","clause_id","title","section","visibility","allowed_grades"}}) for c in chunks]
-    return AskResponse(answer=getattr(out, 'content', str(out)), citations=citations)
+    try:
+        if USE_VECTOR:
+            chunks = get_chunks_vector(req.query, req.user_grade, top=5, k=20, hybrid=True)
+        else:
+            chunks = get_chunks(req.query, req.user_grade)  # your existing keyword retriever
+
+        if not chunks:
+            return AskResponse(answer="No matching policy content found.", citations=[])
+        ctx = "\n\n".join([f"[{c['policy_id']}/{c['clause_id']}] {c['clause_text']}" for c in chunks])
+        llm = get_llm()
+        msg = [
+            {"role":"system","content":"Answer ONLY from provided policy context. Cite clause IDs."},
+            {"role":"user","content": f"Q: {req.query}\n\nContext:\n{ctx}"}
+        ]
+        out = llm.invoke(msg)
+        citations = [Citation(**{k:v for k,v in c.items() if k in {"policy_id","clause_id","title","section","visibility","allowed_grades"}}) for c in chunks]
+        return AskResponse(answer=getattr(out, 'content', str(out)), citations=citations)
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Policy search failed: {type(e).__name__}: {e}")
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest):
@@ -78,5 +86,6 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
