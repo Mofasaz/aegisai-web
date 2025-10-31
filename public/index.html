@@ -174,7 +174,7 @@
       <!-- Propose Rule panel -->
       <div class="panel" style="margin-top:16px;">
         <div class="sectionTitle">
-          <h3>Propose Rule</h3>
+          <h3>Propose Rule</h3> <button id="btnReload" class="chip" style="margin-left:auto;">Reload Rules</button>
           <span class="small">Turn natural language into a YAML rule, then approve.</span>
         </div>
         <div class="row" style="margin-top:8px;">
@@ -236,6 +236,20 @@
       function safeArray(x){ return Array.isArray(x) ? x : [] }
       function text(t){ return (t===null || t===undefined) ? '' : String(t) }
 
+      async function doReloadRules(){
+        const status = document.getElementById('ruleStatus');
+        status.textContent = 'Reloading…';
+        try{
+          const res = await fetch(`${API}/rules/reload`, { method:'POST' });
+          const data = await res.json();
+          if(!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+          status.textContent = `Reloaded: ${data.count} active rule(s)`;
+        }catch(e){
+          status.textContent = `Reload failed: ${String(e)}`;
+        }
+      }
+      document.getElementById('btnReload')?.addEventListener('click', doReloadRules);
+      
       // ---------- Colored badges ----------
       function confidenceBadge(conf){
         if (typeof conf !== 'number') return '';
@@ -516,5 +530,6 @@
     </script>
   </body>
 </html>
+
 
 
