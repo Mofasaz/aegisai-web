@@ -64,7 +64,7 @@ def get_chunks_vector(query: str, user_grade: str, top: int = 5, k: int = 20, hy
     flt = _policy_filter_for_grade(g)
 
     qvec = _embed_query(query)
-    vq = VectorizedQuery(vector=qvec, k_nearest_neighbors=k, fields="embedding")
+    vq = VectorizedQuery(vector=qvec, k_nearest_neighbors=k, fields="content_vector")
 
     try:
         if hybrid:
