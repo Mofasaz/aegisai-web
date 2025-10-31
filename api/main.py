@@ -1,13 +1,13 @@
 import os
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.models import *
 from api.chains import get_llm
 from rules.engine import analyze_events
-from retrieval.azure_retriever import get_chunks
+from retrieval.azure_retriever import get_chunks, get_chunks_vector
 from datetime import datetime, timezone
 
 app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
@@ -87,6 +87,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
