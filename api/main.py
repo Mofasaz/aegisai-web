@@ -1,9 +1,8 @@
-import os
+import os, uuid, json, re
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Response, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-import uuid
 
 from api.models import *
 from api.chains import get_llm
@@ -39,14 +38,45 @@ def me(user: UserPrincipal = Depends(require_user)):
 def healthz():
     return {"status": "ok"}  
 
+def push_rows(rows: list[dict]):
+    url = os.getenv("POWERBI_PUSH_URL")
+    if not url:
+        return
+    try:
+        import requests
+        requests.post(url, json=rows, timeout=4)
+    except Exception:
+        pass
+
+def _llm_judge(answer: str, snippets: list[str]) -> dict:
+    """Tiny LLM judge returning JSON: {'grounding_score': float, 'issues': [..]}"""
+    try:
+        llm = get_llm()
+        sys = ("You are a strict policy auditor. Score groundedness 0..1 ONLY from provided snippets. "
+               "Return JSON: {\"grounding_score\": float, \"issues\": [string]}. No extra text.")
+        user = f"Answer:\n{answer}\n\nSnippets:\n" + "\n---\n".join(snippets)
+        out = llm.invoke([{"role":"system","content":sys},{"role":"user","content":user}])
+        return json.loads(getattr(out, "content", str(out)))
+    except Exception:
+        return {"grounding_score": 0.6, "issues": ["judge_error"]}
+
+def _compute_confidence(chunks: list[dict], judge_score: float, restricted_removed: int) -> float:
+    """Blend simple retrieval heuristics with judge score."""
+    # Heuristic from retrieval:
+    base = 0.35 + min(len(chunks), 5) * 0.1   # 0.45..0.85 depending on number of chunks
+    base = min(base, 0.9)
+    if restricted_removed > 0:
+        base -= 0.05
+    # Blend with judge score
+    conf = 0.5 * base + 0.5 * float(judge_score or 0.6)
+    return round(max(0.0, min(conf, 1.0)), 2)
+
 @app.post("/ask", response_model=AskResponseV2)
 def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(require_user)):
-    effective_grade = user.grade
-    # fallback: if you still allow body grade for demos
-    if not effective_grade and getattr(req, "user_grade", None):
-        effective_grade = req.user_grade
+    # 0) Derive grade from token; allow body fallback for demos
+    effective_grade = user.grade or getattr(req, "user_grade", None)
         
-    # Attach a correlation id for end-to-end tracing (also echoed in JSON)
+    # 1) Attach a correlation id for end-to-end tracing (also echoed in JSON)
     corr = str(uuid.uuid4())
     response.headers["X-Correlation-Id"] = corr
     try:
@@ -57,14 +87,15 @@ def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(requi
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Policy search failed: {type(e).__name__}: {e}")
 
-    # 2) Parallel “peek” at restricted matches (no text shown, meta only)
+    # 2a) Peek at restricted hits (meta only; no text leak)
     restricted_count, restricted_meta = 0, []
     try:
         restricted_count, restricted_meta = count_restricted_hits(req.query)
     except Exception:
+        restricted_count, restricted_meta = 0, []
         # non-fatal: telemetry peek failing must not block Q&A
         pass
-
+        
     # 3) Risky intent detection (simple regex bank)
     risky_pat = match_risky_intent(req.query)
     reasons: list[str] = []
@@ -78,7 +109,7 @@ def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(requi
         try:
             row = {
                 "ts": datetime.now(timezone.utc).isoformat(),
-                "user_id": "",  # fill with AAD UPN later if you add auth
+                "user_id": user.upn or user.oid or "",  # fill with AAD UPN later if you add auth
                 "user_grade": (effective_grade or ""),
                 "query": req.query,
                 "reason": ";".join(reasons),
@@ -111,35 +142,61 @@ def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(requi
 
     llm = get_llm()
     msg = [
-        {"role": "system", "content": "Answer ONLY from provided policy context. Cite clause IDs."},
-        {"role": "user",   "content": f"Q: {req.query}\n\nContext:\n{ctx}"}
+        {"role": "system",
+         "content": "You are a policy assistant. Answer ONLY from the provided policy context. "
+                    "Cite clause IDs in brackets like [EK-XXX/CLAUSE-YY]. "
+                    "Respond as concise BULLET POINTS (use '• ' at the start of each line)."},
+        {"role": "user", "content": f"Q: {req.query}\n\nContext:\n{ctx}"}
     ]
     out = llm.invoke(msg)
+    answer = getattr(out, "content", str(out))
 
-    # 7) Shape citations + UX highlights
-    citations = [
-        Citation(**{k: v for k, v in c.items() if k in {"policy_id", "clause_id", "title", "section", "visibility", "allowed_grades"}})
-        for c in chunks
-    ]
-    highlights = [
-        {
-            "policy_id": c["policy_id"],
-            "clause_id": c["clause_id"],
-            # small, safe preview (no more than ~180 chars)
-            "snippet": (c.get("clause_text", "")[:180] + ("…" if len(c.get("clause_text", "")) > 180 else ""))
-        }
-        for c in chunks[:5]
-    ]
+    # 7) LLM judge + confidence
+    judge = _llm_judge(answer, [c["clause_text"] for c in chunks[:3]])
+    restricted_removed = 1 if ("restricted_probe" in reasons) else 0
+    confidence = _compute_confidence(chunks, judge.get("grounding_score", 0.6), restricted_removed)
+    
+    # 8) Shape citations + UX highlights
+    #citations = [
+    #    Citation(**{k: v for k, v in c.items() if k in {"policy_id", "clause_id", "title", "section", "visibility", "allowed_grades"}})
+    #    for c in chunks
+    #]
+    #highlights = [
+    #    {
+    #        "policy_id": c["policy_id"],
+    #        "clause_id": c["clause_id"],
+    #        # small, safe preview (no more than ~180 chars)
+    #        "snippet": (c.get("clause_text", "")[:180] + ("…" if len(c.get("clause_text", "")) > 180 else ""))
+    #    }
+    #    for c in chunks[:5]
+    #]
+    citations = []
+    for c in chunks:
+        citations.append(Citation(
+            policy_id=c["policy_id"],
+            clause_id=c["clause_id"],
+            title=c.get("title") or c.get("policy_title"),
+            section=c.get("section"),
+            visibility=c.get("visibility"),
+            allowed_grades=c.get("allowed_grades") or []
+        ))
 
-    # 8) Return enriched JSON
+    highlights = [{
+        "policy_id": c["policy_id"],
+        "clause_id": c["clause_id"],
+        "snippet": (c.get("clause_text", "")[:220] + ("…" if len(c.get("clause_text", "")) > 220 else "")),
+    } for c in chunks[:5]]
+
+    # 9) Return enriched JSON
+    reasons_ext = (judge.get("issues") or []) + reasons
     return AskResponseV2(
-       answer=getattr(out, "content", str(out)),
+        answer=answer,
         citations=citations,
         highlights=highlights,
         reasoning="Answer strictly derived from matched policy clauses.",
-        confidence=0.82,  # placeholder; later blend vector/reranker scores
+        confidence=confidence,  # placeholder; later blend vector/reranker scores
         restricted_probe=("restricted_probe" in reasons),
-        risk_reasons=reasons or None,
+        risk_reasons=(reasons_ext or None),
         correlation_id=corr,
     )   
     #    if not chunks:
@@ -204,6 +261,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
