@@ -1,4 +1,4 @@
-import os, uuid, json, re
+import os, uuid, json, re, yaml
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Response, Depends
 from fastapi.responses import FileResponse, JSONResponse
@@ -23,6 +23,7 @@ except Exception:
 
 app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
 USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
+RULES_FILE = os.getenv("RULES_FILE", "data/rules.yaml")
 
 @app.get("/me")
 def me(user: UserPrincipal = Depends(require_user)):
@@ -104,7 +105,81 @@ def count_restricted_hits(query: str) -> tuple[int, list[dict]]:
         cid = getattr(r, "clause_id", None) or r.get("clause_id")
         meta.append({"policy_id": pid, "clause_id": cid})
     return cnt, meta
-    
+
+RULES_FILE = os.getenv("RULES_FILE", "data/rules.yaml")
+
+def _ensure_rules_file():
+    os.makedirs(os.path.dirname(RULES_FILE), exist_ok=True)
+    if not os.path.exists(RULES_FILE):
+        with open(RULES_FILE, "w", encoding="utf-8") as f:
+            f.write("rules: []\n")
+
+def _validate_rule_dict(d: Dict[str, Any]) -> List[str]:
+    """
+    Lightweight validation to keep schema consistent with your engine.
+    Expected top-level fields (recommendation):
+      id, name, description, match, conditions, severity, risk_points, remediation
+    """
+    warns = []
+    required = ["id", "name", "description", "match", "conditions", "severity", "risk_points", "remediation"]
+    for k in required:
+        if k not in d:
+            warns.append(f"Missing key: {k}")
+
+    # structure hints
+    if "match" in d and not isinstance(d["match"], dict):
+        warns.append("match should be an object with arrays like actions/roles/systems/locations/status.")
+    if "conditions" in d and not isinstance(d["conditions"], dict):
+        warns.append("conditions should be an object (e.g., shift_hours_gt, last_30d_failed_logins_gt, window_minutes, logic).")
+    if "remediation" in d and not isinstance(d["remediation"], list):
+        warns.append("remediation should be a list of steps.")
+    return warns
+
+def _llm_rule_yaml_from_prompt(prompt: str, category: Optional[str], severity: Optional[str]) -> str:
+    """
+    Ask your LLM to produce a single YAML rule document (no markdown fences).
+    """
+    llm = get_llm()
+    sys = {
+        "role": "system",
+        "content": (
+            "You are a compliance rule generator. Produce ONLY valid YAML (no markdown fences). "
+            "Output a SINGLE rule object (not a list). Keys must be:\n"
+            "id, name, description, match, conditions, severity, risk_points, remediation\n\n"
+            "Schema example:\n"
+            "id: R-ACC-001\n"
+            "name: Off-hour Crew Portal Access\n"
+            "description: Flag off-hour access to Crew Scheduling Portal by Cabin Crew\n"
+            "match:\n"
+            "  actions: [login, access]\n"
+            "  roles: [Cabin Crew]\n"
+            "  systems: [Crew Scheduling Portal]\n"
+            "  locations: []\n"
+            "  status: []\n"
+            "conditions:\n"
+            "  window_minutes: 1440\n"
+            "  shift_hours_gt: 10\n"
+            "  last_30d_failed_logins_gt: 2\n"
+            "  logic: AND\n"
+            "severity: high\n"
+            "risk_points: 70\n"
+            "remediation:\n"
+            "  - Notify line manager\n"
+            "  - Require policy refresh"
+        )
+    }
+    user = {
+        "role": "user",
+        "content": (
+            f"Natural language requirement:\n{prompt}\n\n"
+            f"Category hint: {category or 'n/a'}\n"
+            f"Preferred severity (optional): {severity or 'n/a'}\n"
+            "Return only a single YAML rule object."
+        )
+    }
+    out = llm.invoke([sys, user])
+    return getattr(out, "content", str(out)).strip()
+
 @app.post("/ask", response_model=AskResponseV2)
 def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(require_user)):
     # 0) Derive grade from token; allow body fallback for demos
@@ -250,6 +325,69 @@ def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(requi
     # except Exception as e:
        # raise HTTPException(status_code=500, detail=f"Policy search failed: {type(e).__name__}: {e}")
 
+@app.post("/rules/suggest", response_model=RuleSuggestResponse)
+def suggest_rule(req: RuleSuggestRequest, user: UserPrincipal = Depends(require_user)):
+    # Generate YAML via LLM
+    raw_yaml = _llm_rule_yaml_from_prompt(req.prompt, req.category, req.severity)
+
+    # Parse & validate
+    parsed = None
+    warns: List[str] = []
+    try:
+        parsed = yaml.safe_load(raw_yaml)
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM did not return a YAML object; got list or scalar.")
+        warns = _validate_rule_dict(parsed)
+        # Auto-inject severity if missing but user hinted
+        if "severity" not in parsed and req.severity:
+            parsed["severity"] = req.severity
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML from model: {e}")
+
+    # Normalize: if id missing, synthesize one
+    if "id" not in parsed or not parsed["id"]:
+        parsed["id"] = f"R-AUTO-{uuid.uuid4().hex[:6].upper()}"
+
+    # Re-dump to normalized YAML
+    normalized_yaml = yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
+
+    return RuleSuggestResponse(yaml=normalized_yaml, parsed=parsed, warnings=warns or None)
+
+@app.post("/rules/apply", response_model=RuleApplyResponse)
+def apply_rule(req: RuleApplyRequest, user: UserPrincipal = Depends(require_user)):
+    """
+    Append the proposed rule to data/rules.yaml under 'rules:'.
+    NOTE: On Azure App Service, '/home/site/wwwroot' is redeployed on each build;
+    use this only for demo. For persistence, wire a Storage/DB later.
+    """
+    try:
+        new_rule = yaml.safe_load(req.yaml)
+        if not isinstance(new_rule, dict):
+            raise ValueError("YAML must be a single object.")
+        warns = _validate_rule_dict(new_rule)
+        if warns:
+            # still allow save, but report the warnings
+            pass
+        _ensure_rules_file()
+        with open(RULES_FILE, "r", encoding="utf-8") as f:
+            doc = yaml.safe_load(f) or {}
+        if "rules" not in doc or not isinstance(doc["rules"], list):
+            doc["rules"] = []
+        # Prevent duplicates on id
+        existing_ids = {r.get("id") for r in doc["rules"] if isinstance(r, dict)}
+        if new_rule.get("id") in existing_ids:
+            raise HTTPException(status_code=409, detail=f"Rule id already exists: {new_rule.get('id')}")
+        doc["rules"].append(new_rule)
+        with open(RULES_FILE, "w", encoding="utf-8") as f:
+            yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=True)
+        msg = "Saved to rules.yaml"
+        if warns: msg += f" (warnings: {', '.join(warns)})"
+        return RuleApplyResponse(status="ok", message=msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to apply rule: {e}")
+
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest):
     anomalies = analyze_events(req.events)
@@ -297,6 +435,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
