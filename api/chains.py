@@ -17,7 +17,7 @@ class AOAIChatClient:
     def __init__(self):
         self.client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),        # <-- your AOAI key
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"), # e.g. https://<name>.openai.azure.com/
             timeout=60,
         )
@@ -39,6 +39,7 @@ def get_llm():
         return MockLLM()
     else:
         return AOAIChatClient()
+
 
 
 
