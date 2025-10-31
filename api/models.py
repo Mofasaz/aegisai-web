@@ -18,6 +18,24 @@ class AskResponse(BaseModel):
     answer: str
     citations: List[Citation]
 
+class Highlight(BaseModel):
+    policy_id: str
+    clause_id: str
+    snippet: str
+
+class AskResponseV2(BaseModel):
+    # keep original fields for backward compatibility
+    answer: str
+    citations: List[Citation] = Field(default_factory=list)
+
+    # new, optional enrichments
+    highlights: Optional[List[Highlight]] = None
+    reasoning: Optional[str] = None
+    confidence: Optional[float] = None
+    restricted_probe: Optional[bool] = None
+    risk_reasons: Optional[List[str]] = None
+    correlation_id: Optional[str] = None
+
 # /analyze
 class LogEvent(BaseModel):
     # core
@@ -105,6 +123,7 @@ class AnomalyPushRequest(BaseModel):
 class AnomalyPushResponse(BaseModel):
     status: str
     count: int
+
 
 
 
