@@ -104,7 +104,7 @@ def get_chunks_vector(query: str, user_grade: str, top: int = 5, k: int = 20, hy
                 top=top,
                 select=[
                     "policy_id","clause_id","clause_text","section",
-                    "visibility","allowed_grades","department","title"
+                    "visibility","allowed_grades","department","policy_title"
                 ],
             )
         else:
@@ -116,7 +116,7 @@ def get_chunks_vector(query: str, user_grade: str, top: int = 5, k: int = 20, hy
                 top=top,
                 select=[
                     "policy_id","clause_id","clause_text","section",
-                    "visibility","allowed_grades","department","title"
+                    "visibility","allowed_grades","department","policy_title"
                 ],
             )
 
@@ -125,7 +125,7 @@ def get_chunks_vector(query: str, user_grade: str, top: int = 5, k: int = 20, hy
             out.append({
                 "policy_id":       _doc_get(r, "policy_id"),
                 "clause_id":       _doc_get(r, "clause_id"),
-                "title":           _doc_get(r, "title"),
+                "title":           _doc_get(r, "policy_title"),
                 "section":         _doc_get(r, "section"),
                 "clause_text":     _doc_get(r, "clause_text"),
                 "visibility":      _doc_get(r, "visibility"),
@@ -152,7 +152,7 @@ def get_chunks(query: str, user_grade: str, top: int = 5):
         select=[
             "policy_id",
             "clause_id",
-            "title",
+            "policy_title",
             "section",
             "clause_text",
             "visibility",
@@ -167,7 +167,7 @@ def get_chunks(query: str, user_grade: str, top: int = 5):
         chunks.append({
             "policy_id":       _doc_get(r, "policy_id"),
             "clause_id":       _doc_get(r, "clause_id"),
-            "title":           _doc_get(r, "title"),  # mapped
+            "title":           _doc_get(r, "policy_title"),  # mapped
             "section":         _doc_get(r, "section"),
             "clause_text":     _doc_get(r, "clause_text"),        # mapped
             "visibility":      _doc_get(r, "visibility"),
