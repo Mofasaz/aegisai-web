@@ -1,14 +1,15 @@
+from pathlib import Path
 from fastapi import FastAPI
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+
 from api.models import *
 from api.chains import get_llm
 from rules.engine import analyze_events
 from retrieval.azure_retriever import get_chunks
 from datetime import datetime, timezone
 
-app = FastAPI(title="AegisAI")
-
-from fastapi.staticfiles import StaticFiles
-app.mount("/", StaticFiles(directory="public", html=True), name="public")
+app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
 
 @app.get("/healthz")
 def healthz():
@@ -59,6 +60,23 @@ def push_anomalies(req: AnomalyPushRequest):
     # offline: stubbed success; Azure phase uses powerbi.push_rows
     return AnomalyPushResponse(status="ok", count=len(req.items))
 
+# ----- STATIC (after API), with absolute path -----
+BASE_DIR = Path(__file__).resolve().parent.parent
+PUBLIC_DIR = BASE_DIR / "public"
+
+if PUBLIC_DIR.exists():
+    # Serve root (/) explicitly so /docs keeps working
+    @app.get("/")
+    def root():
+        return FileResponse(PUBLIC_DIR / "index.html")
+
+    # Also serve /ui/* for assets
+    app.mount("/ui", StaticFiles(directory=str(PUBLIC_DIR), html=True), name="ui")
+else:
+    @app.get("/")
+    def root_placeholder():
+        return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
