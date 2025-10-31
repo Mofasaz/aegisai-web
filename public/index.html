@@ -1,126 +1,155 @@
 <!doctype html>
 <html>
-<head>
-  <meta charset="utf-8" />
-  <title>AegisAI – Policy Copilot</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body { font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
-    .row { display: flex; gap: 16px; align-items: stretch; }
-    .col { flex: 1; }
-    .card { border: 1px solid #e6e6e6; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
-    .muted { color: #666; }
-    .answer { font-size: 16px; margin: 12px 0; }
-    .chips { display:flex; flex-wrap:wrap; gap: 8px; margin-top: 8px; }
-    .chip { padding: 4px 8px; border-radius: 999px; border:1px solid #ddd; background:#fafafa; }
-    .chip.badge { background:#eef6ff; border-color:#cde5ff; }
-    .list { margin: 8px 0; padding: 0; list-style: none; }
-    .list li { padding: 8px 0; border-bottom: 1px dashed #eee; }
-    .small { font-size: 12px; color:#555; }
-    .warn { color:#b35b00; font-weight:600; }
-    .ok { color:#026e00; font-weight:600; }
-    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f7f7; padding:2px 6px; border-radius:6px; border:1px solid #eaeaea; }
-  </style>
-</head>
-<body>
-  <h2>🔎 AegisAI – Policy Copilot</h2>
-  <div class="row">
-    <div class="col card">
-      <form id="askForm">
-        <label>Question</label><br/>
-        <textarea id="q" rows="3" style="width:100%" placeholder="Can I email crew schedules externally?"></textarea><br/><br/>
-        <label>User Grade</label><br/>
-        <input id="grade" placeholder="G7" style="width:120px" />
-        <button type="submit">Ask</button>
-      </form>
-      <div id="err" class="warn" style="margin-top:8px;"></div>
-      <div id="corr" class="small muted" style="margin-top:8px;"></div>
+  <head>
+    <meta charset="utf-8" />
+    <title>AegisAI — Policy Copilot</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+      .row { display: flex; gap: 0.75rem; }
+      textarea, input { width: 100%; padding: 0.6rem; }
+      button { padding: 0.6rem 1rem; cursor: pointer; }
+      .panel { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-top: 1rem; }
+      .small { color: #666; font-size: 0.9rem; }
+      ul { margin: 0.5rem 0 0 1.25rem; }
+      code { background: #f7f7f7; padding: 0.1rem 0.3rem; border-radius: 4px; }
+      .badge { display: inline-block; padding: 2px 6px; border: 1px solid #ccc; border-radius: 999px; font-size: 0.8rem; margin-left: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>AegisAI — Policy Copilot</h1>
+
+    <div class="panel">
+      <div class="row">
+        <input id="grade" placeholder="Grade (e.g., Cabin Crew / Pilot / HR Manager)" />
+      </div>
+      <div class="row" style="margin-top:0.5rem;">
+        <textarea id="q" rows="3" placeholder="Ask a policy question..."></textarea>
+      </div>
+      <div class="row" style="margin-top:0.5rem;">
+        <button id="askBtn">Ask</button>
+        <span id="status" class="small"></span>
+      </div>
     </div>
-    <div class="col card">
-      <div class="muted small">Answer</div>
-      <div id="answer" class="answer"></div>
-      <div id="meta" class="chips"></div>
-      <div class="muted small">Citations</div>
-      <ul id="cites" class="list"></ul>
-      <div class="muted small">Highlights</div>
-      <ul id="highlights" class="list"></ul>
+
+    <div id="result" class="panel" style="display:none;">
+      <h3>Answer</h3>
+      <div id="answer"></div>
+      <div id="meta" class="small"></div>
+
+      <h3 style="margin-top:1rem;">Citations</h3>
+      <ul id="citations"></ul>
+
+      <h3 style="margin-top:1rem;">Highlights</h3>
+      <ul id="highlights"></ul>
+
+      <details style="margin-top:1rem;">
+        <summary>Raw JSON</summary>
+        <pre id="raw" style="white-space:pre-wrap;"></pre>
+      </details>
     </div>
-  </div>
 
-<script>
-const API = ''; // same-origin
+    <script>
+      // If your API is same-origin, leave empty. Else set to your base URL.
+      const API = ''; // e.g. 'https://yourapp.azurewebsites.net'
 
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-}
+      const el = (id) => document.getElementById(id);
 
-async function ask(q, user_grade) {
-  const res = await fetch(`${API}/ask`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ query: q, user_grade })
-  });
-  const corr = res.headers.get('X-Correlation-Id') || '';
-  const json = await res.json();
-  return { json, corr, ok: res.ok, status: res.status };
-}
+      function safeArray(x) {
+        if (Array.isArray(x)) return x;
+        return [];
+      }
 
-function render(data) {
-  // Clear
-  document.getElementById('err').textContent = '';
-  document.getElementById('answer').textContent = '';
-  document.getElementById('meta').innerHTML = '';
-  document.getElementById('cites').innerHTML = '';
-  document.getElementById('highlights').innerHTML = '';
-  document.getElementById('corr').textContent = data.corr ? `Correlation Id: ${data.corr}` : '';
+      function text(t) {
+        return (t === null || t === undefined) ? '' : String(t);
+      }
 
-  if (!data.ok) {
-    document.getElementById('err').textContent = (data.json && (data.json.detail || data.json.error)) || `HTTP ${data.status}`;
-    return;
-  }
+      function renderResult(data) {
+        el('result').style.display = 'block';
+        el('raw').textContent = JSON.stringify(data, null, 2);
 
-  const { answer, citations=[], reasoning, confidence, restricted_probe, risk_reasons=[], highlights=[] } = data.json;
+        // v1/v2 compatibility — answer is the same key
+        el('answer').textContent = text(data.answer);
 
-  document.getElementById('answer').textContent = answer || '';
+        // Optional meta line (confidence, correlation id, flags)
+        const metaBits = [];
+        if (typeof data.confidence === 'number') metaBits.push(`confidence: ${(data.confidence*100).toFixed(0)}%`);
+        if (data.correlation_id) metaBits.push(`corr: ${data.correlation_id}`);
+        if (data.restricted_probe) metaBits.push('restricted-probe');
+        if (safeArray(data.risk_reasons).length) metaBits.push(`reasons: ${data.risk_reasons.join('; ')}`);
+        el('meta').textContent = metaBits.join('  •  ');
 
-  // badges
-  const meta = document.getElementById('meta');
-  if (reasoning) meta.appendChild(el('span','chip', `Why: ${reasoning}`));
-  if (typeof confidence === 'number') meta.appendChild(el('span','chip badge', `Confidence ${(confidence*100).toFixed(0)}%`));
-  if (restricted_probe) meta.appendChild(el('span','chip warn', 'Restricted probe detected'));
-  if (risk_reasons.length) meta.appendChild(el('span','chip', `Risk: ${risk_reasons.join(' | ')}`));
+        // Citations (snake_case keys per backend)
+        const cites = safeArray(data.citations || data.Citations);
+        const ulC = el('citations');
+        ulC.innerHTML = '';
+        if (cites.length === 0) {
+          ulC.innerHTML = '<li class="small">None</li>';
+        } else {
+          cites.forEach(c => {
+            const li = document.createElement('li');
+            const title = c.title ? ` — ${c.title}` : '';
+            const grades = Array.isArray(c.allowed_grades) ? ` <span class="badge">grades: ${c.allowed_grades.join(', ')}</span>` : '';
+            const vis = c.visibility ? ` <span class="badge">${c.visibility}</span>` : '';
+            li.innerHTML = `<code>[${c.policy_id}/${c.clause_id}]</code>${title} — ${c.section || ''}${vis}${grades}`;
+            ulC.appendChild(li);
+          });
+        }
 
-  // citations
-  const citeList = document.getElementById('cites');
-  citations.forEach(c => {
-    const li = el('li');
-    const head = el('div', null, `${c.policy_id}/${c.clause_id} • ${c.title || c.section || ''}`);
-    const caps = el('div','small muted', `${c.visibility || 'public'} ${Array.isArray(c.allowed_grades) && c.allowed_grades.length ? ' • allowed: '+c.allowed_grades.join(', ') : ''}`);
-    li.appendChild(head);
-    li.appendChild(caps);
-    citeList.appendChild(li);
-  });
+        // Highlights
+        const hl = safeArray(data.highlights || data.Highlights);
+        const ulH = el('highlights');
+        ulH.innerHTML = '';
+        if (hl.length === 0) {
+          ulH.innerHTML = '<li class="small">None</li>';
+        } else {
+          hl.forEach(h => {
+            const li = document.createElement('li');
+            li.innerHTML = `<code>[${h.policy_id}/${h.clause_id}]</code> ${h.snippet ? h.snippet : ''}`;
+            ulH.appendChild(li);
+          });
+        }
+      }
 
-  // highlights
-  const hi = document.getElementById('highlights');
-  highlights.forEach(h => {
-    const li = el('li');
-    li.appendChild(el('div', null, `${h.policy_id}/${h.clause_id}`));
-    li.appendChild(el('div','small', h.snippet || ''));
-    hi.appendChild(li);
-  });
-}
+      async function doAsk() {
+        el('status').textContent = 'Asking…';
+        el('result').style.display = 'none';
 
-document.getElementById('askForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const q = document.getElementById('q').value.trim();
-  const grade = document.getElementById('grade').value.trim();
-  const data = await ask(q, grade);
-  render(data);
-});
-</script>
-</body>
+        const payload = {
+          query: el('q').value.trim(),
+          user_grade: el('grade').value.trim() || null
+        };
+
+        try {
+          const res = await fetch(`${API}/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || `${res.status} ${res.statusText}`);
+          }
+          const data = await res.json();
+          renderResult(data);
+          el('status').textContent = 'Done';
+        } catch (e) {
+          el('status').textContent = 'Error';
+          el('result').style.display = 'block';
+          el('answer').textContent = '';
+          el('citations').innerHTML = '';
+          el('highlights').innerHTML = '';
+          el('raw').textContent = String(e);
+        }
+      }
+
+      el('askBtn').addEventListener('click', doAsk);
+      // Optional: submit on Ctrl+Enter in textarea
+      el('q').addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
+          doAsk();
+        }
+      });
+    </script>
+  </body>
 </html>
