@@ -34,7 +34,7 @@ def get_chunks(query: str, user_grade: str, top: int = 5):
         select=[
             "policy_id",
             "clause_id",
-            "title_data_column",
+            "title",
             "section",
             "clause_text",
             "visibility",
@@ -49,7 +49,7 @@ def get_chunks(query: str, user_grade: str, top: int = 5):
         chunks.append({
             "policy_id":       _doc_get(r, "policy_id"),
             "clause_id":       _doc_get(r, "clause_id"),
-            "title":           _doc_get(r, "title_data_column"),  # mapped
+            "title":           _doc_get(r, "title"),  # mapped
             "section":         _doc_get(r, "section"),
             "clause_text":     _doc_get(r, "clause_text"),        # mapped
             "visibility":      _doc_get(r, "visibility"),
