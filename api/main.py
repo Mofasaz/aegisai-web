@@ -71,6 +71,40 @@ def _compute_confidence(chunks: list[dict], judge_score: float, restricted_remov
     conf = 0.5 * base + 0.5 * float(judge_score or 0.6)
     return round(max(0.0, min(conf, 1.0)), 2)
 
+def count_restricted_hits(query: str) -> tuple[int, list[dict]]:
+    """
+    Returns (count, meta_list) of restricted documents that match the query.
+    Meta list includes only policy_id/clause_id; no clause_text to avoid leaks.
+    """
+    from azure.search.documents import SearchClient
+    from azure.core.credentials import AzureKeyCredential
+
+    endpoint = os.getenv("AZURE_SEARCH_ENDPOINT")
+    index = os.getenv("AZURE_SEARCH_INDEX")
+    key = os.getenv("AZURE_SEARCH_API_KEY")
+    if not (endpoint and index and key):
+        return 0, []
+
+    client = SearchClient(endpoint=endpoint, index_name=index, credential=AzureKeyCredential(key))
+    # visibility == 'restricted' (case-insensitive via tolower)
+    flt = "tolower(visibility) eq 'restricted'"
+    results = client.search(
+        search_text=query or "*",
+        filter=flt,
+        query_type="simple",
+        top=5,
+        select=["policy_id", "clause_id"]  # no text leakage
+    )
+    meta = []
+    cnt = 0
+    for r in results:
+        cnt += 1
+        # robust extraction
+        pid = getattr(r, "policy_id", None) or r.get("policy_id")
+        cid = getattr(r, "clause_id", None) or r.get("clause_id")
+        meta.append({"policy_id": pid, "clause_id": cid})
+    return cnt, meta
+    
 @app.post("/ask", response_model=AskResponseV2)
 def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(require_user)):
     # 0) Derive grade from token; allow body fallback for demos
@@ -261,6 +295,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
