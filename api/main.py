@@ -11,7 +11,15 @@ from rules.engine import analyze_events
 from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restricted_hits
 from datetime import datetime, timezone
 from rules.intent import match_risky_intent
-from integrations.powerbi import push_rows
+
+try:
+    from integrations.powerbi import push_rows
+except Exception:
+    def push_rows(rows):
+        # safe no-op fallback
+        import logging, json
+        logging.info("[telemetry] (noop) %s", json.dumps({"rows": rows})[:500])
+
 
 app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
 USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
@@ -180,6 +188,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
