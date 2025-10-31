@@ -23,8 +23,18 @@ _aoai = AzureOpenAI(
 _EMBED_DEPLOY = os.getenv("AZURE_OPENAI_EMBED_DEPLOYMENT")  # e.g., textemb3 (1536 dims)
 
 def _normalize_grade(g: str) -> str:
-    g = (g or "").strip().upper()
-    return g if g.startswith("G") else f"G{g}"
+    return (g or "").strip()
+
+def _policy_filter_for_grade(g: str) -> str:
+    """
+    visibility != 'restricted'  → allowed (no grade check)
+    visibility == 'restricted' → must match allowed_grades
+    """
+    # 'visibility' is stored in lower case and 'allowed_grades' in upper case
+    return (
+        "(visibility ne 'restricted') "
+        f"or (visibility eq 'restricted' and allowed_grades/any(x: x eq '{g}'))"
+    )
 
 def _doc_get(d, k, default=None):
     # Azure Search returns SearchResult; treat it safely
@@ -44,7 +54,7 @@ def get_chunks_vector(query: str, user_grade: str, top: int = 5, k: int = 20, hy
     - k: neighbors to pull from vector stage before optional hybrid re-rank on server
     """
     g = _normalize_grade(user_grade)
-    flt = f"allowed_grades/any(x: x eq '{g}')"
+    flt = _policy_filter_for_grade(g)
 
     qvec = _embed_query(query)
     vq = VectorizedQuery(vector=qvec, k_nearest_neighbors=k, fields="embedding")
@@ -98,7 +108,7 @@ def get_chunks_vector(query: str, user_grade: str, top: int = 5, k: int = 20, hy
 
 def get_chunks(query: str, user_grade: str, top: int = 5):
     g = _normalize_grade(user_grade)
-    flt = f"allowed_grades/any(x: x eq '{g}')"
+    flt = _policy_filter_for_grade(g)
 
     results = _client.search(
         search_text=query,
