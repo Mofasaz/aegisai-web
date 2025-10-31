@@ -13,13 +13,19 @@ if not all([ENDPOINT, INDEX, KEY]):
     raise RuntimeError("Azure Search is not configured: set AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_INDEX, AZURE_SEARCH_API_KEY")
     
 _client = SearchClient(endpoint=ENDPOINT, index_name=INDEX, credential=AzureKeyCredential(KEY))
+_aoai_client = None
 
-# Embedding client
-_aoai = AzureOpenAI(
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-)
+# Lazy Embedding client
+def _get_aoai():
+    global _aoai_client
+    if _aoai_client is None:
+        _aoai_client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        )
+    return _aoai_client
+
 _EMBED_DEPLOY = os.getenv("AZURE_OPENAI_EMBED_DEPLOYMENT")  # e.g., textemb3 (1536 dims)
 
 def _normalize_grade(g: str) -> str:
@@ -44,6 +50,7 @@ def _doc_get(d, k, default=None):
         return getattr(d, k, default)
 
 def _embed_query(text: str) -> list[float]:
+    _aoai = _get_aoai()
     out = _aoai.embeddings.create(model=_EMBED_DEPLOY, input=text)
     return out.data[0].embedding
 
