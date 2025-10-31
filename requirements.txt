@@ -5,8 +5,9 @@ pydantic==2.9.2
 pyyaml==6.0.2
 requests==2.32.3
 # If using Azure services in CHAIN_MODE=azure:
-azure-search-documents==11.5.1
+azure-search-documents==11.6.0b8
 openai==1.51.0
+
 
 
 
