@@ -148,6 +148,34 @@
       }
       .issue-badge[data-tip]:hover::before{ opacity:1; }
       .sectionTitle .chip { padding: 4px 10px; border-radius: 999px; }
+      /* Marhaba-styled action button */
+      .btn-marhaba{
+        --mh-from:#E8B84E;   /* warm gold */
+        --mh-to:#D7951A;     /* amber/orange */
+        --mh-border:#A87008; /* rich outline */
+        --mh-glow: rgba(232,184,78,.35);
+      
+        display:inline-flex; align-items:center; gap:6px;
+        padding:8px 12px; border-radius:999px;
+        background: linear-gradient(135deg, var(--mh-from), var(--mh-to));
+        border:1px solid var(--mh-border);
+        color:#1a1205; font-weight:700;
+        box-shadow: 0 10px 24px var(--mh-glow), inset 0 0 0 1px rgba(255,255,255,.25);
+        cursor:pointer; transition: transform .05s ease, filter .15s ease, box-shadow .2s ease;
+      }
+      .btn-marhaba:hover{
+        filter: brightness(1.05);
+        box-shadow: 0 12px 28px var(--mh-glow), inset 0 0 0 1px rgba(255,255,255,.35);
+      }
+      .btn-marhaba:active{
+        transform: translateY(1px);
+      }
+      .btn-marhaba .dot{
+        width:8px; height:8px; border-radius:50%;
+        background:#7A0F1B; /* deep maroon accent */
+        box-shadow: 0 0 0 2px rgba(122,15,27,.12);
+      }
+
     </style>
   </head>
   <body>
@@ -175,7 +203,9 @@
       <div class="panel" style="margin-top:16px;">
         <div class="sectionTitle">
           <h3>Propose Rule</h3> 
-          <button id="btnReload" type="button" class="chip" aria-label="Reload rules" style="margin-left:auto;">Reload Rules</button>
+          <button id="btnReload" class="btn-marhaba" style="margin-left:auto;">
+            <span class="dot"></span> Reload Rules
+          </button>
         </div>
         <div class="small" style="margin-top:6px;">Turn natural language into a YAML rule, then approve.</div>
         <div class="row" style="margin-top:8px;">
@@ -531,6 +561,7 @@
     </script>
   </body>
 </html>
+
 
 
 
