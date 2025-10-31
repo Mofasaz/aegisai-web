@@ -4,6 +4,7 @@ from azure.core.credentials import AzureKeyCredential
 from azure.search.documents.models import VectorizedQuery
 from azure.core.exceptions import HttpResponseError
 from openai import AzureOpenAI
+from typing import Tuple, List, Dict
 
 ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 INDEX    = os.getenv("AZURE_SEARCH_INDEX")
@@ -14,6 +15,32 @@ if not all([ENDPOINT, INDEX, KEY]):
     
 _client = SearchClient(endpoint=ENDPOINT, index_name=INDEX, credential=AzureKeyCredential(KEY))
 _aoai_client = None
+
+# ---- Add to retrieval/azure_retriever.py -----------------------------------
+from typing import Tuple, List, Dict
+
+def count_restricted_hits(query: str, top:int = 5) -> Tuple[int, List[Dict]]:
+    """
+    Returns (#hits, lite-metadata) for restricted policies that match the query.
+    NOTE: This does NOT return clause_text; it's only for telemetry/anomaly logging.
+    """
+    results = _client.search(
+        search_text=query,
+        filter="visibility eq 'restricted'",
+        query_type="simple",
+        top=top,
+        select=["policy_id", "clause_id", "policy_title", "section", "visibility"]
+    )
+    hits = []
+    for r in results:
+        hits.append({
+            "policy_id":    _doc_get(r, "policy_id"),
+            "clause_id":    _doc_get(r, "clause_id"),
+            "title":        _doc_get(r, "policy_title"),
+            "section":      _doc_get(r, "section"),
+            "visibility":   _doc_get(r, "visibility"),
+        })
+    return len(hits), hits
 
 # Lazy Embedding client
 def _get_aoai():
