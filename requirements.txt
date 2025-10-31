@@ -7,6 +7,7 @@ requests==2.32.3
 # If using Azure services in CHAIN_MODE=azure:
 azure-search-documents==11.6.0b8
 openai==1.51.0
+httpx==0.27.2
 
 
 
