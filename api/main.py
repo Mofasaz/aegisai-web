@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.models import *
 from api.chains import get_llm
-from rules.engine import analyze_events
+from rules.engine import analyze_events, load_rules_from_file, set_rules, get_rules
 from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restricted_hits
 from datetime import datetime, timezone
 from rules.intent import match_risky_intent
@@ -34,6 +34,22 @@ def me(user: UserPrincipal = Depends(require_user)):
         "roles": user.roles,
         "grade": user.grade
     }
+
+@app.on_event("startup")
+def _load_rules_startup():
+    try:
+        os.makedirs(os.path.dirname(RULES_FILE), exist_ok=True)
+        if not os.path.exists(RULES_FILE):
+            # Seed empty file for demo environments
+            with open(RULES_FILE, "w", encoding="utf-8") as f:
+                f.write("rules: []\n")
+        rules = load_rules_from_file(RULES_FILE)
+        set_rules(rules)
+        # optional: store in app.state for introspection
+        app.state.rules_path = RULES_FILE
+    except Exception as e:
+        # Don’t block app boot: you can still serve /ask without rules
+        print(f"[WARN] Failed to load rules at startup: {e}")
 
 @app.get("/healthz")
 def healthz():
@@ -381,12 +397,31 @@ def apply_rule(req: RuleApplyRequest, user: UserPrincipal = Depends(require_user
         with open(RULES_FILE, "w", encoding="utf-8") as f:
             yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=True)
         msg = "Saved to rules.yaml"
+        set_rules(load_rules_from_file(RULES_FILE))  # hot-reload in memory
         if warns: msg += f" (warnings: {', '.join(warns)})"
         return RuleApplyResponse(status="ok", message=msg)
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to apply rule: {e}")
+
+@app.post("/rules/reload")
+@app.get("/rules/reload")
+def reload_rules(user: UserPrincipal = Depends(require_user)):
+    """
+    Re-read YAML from disk and refresh the in-memory rules cache.
+    Returns the rule count now active.
+    """
+    try:
+        rules = load_rules_from_file(RULES_FILE)
+        set_rules(rules)
+        return {"status": "ok", "count": len(rules), "source": RULES_FILE}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reload rules: {e}")
+
+@app.get("/rules/list")
+def list_rules(user: UserPrincipal = Depends(require_user)):
+    return {"rules": get_rules(), "count": len(get_rules())}
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest):
@@ -435,6 +470,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
