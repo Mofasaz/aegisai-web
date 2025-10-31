@@ -1,99 +1,126 @@
 <!doctype html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <title>AegisAI – Policy Brain</title>
-        <style>
-            body { font-family: system-ui, Arial; max-width: 800px; margin: 24px auto; }
-            textarea, input, select, button { font: inherit; }
-            .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 12px 0; }
-            .row { display: flex; gap: 8px; align-items: center; }
-            .row > * { flex: 1; }
-            pre { white-space: pre-wrap; }
-        </style>
-    </head>
-    <body>
-        <h1>AegisAI</h1>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>AegisAI – Policy Copilot</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; color: #111; }
+    .row { display: flex; gap: 16px; align-items: stretch; }
+    .col { flex: 1; }
+    .card { border: 1px solid #e6e6e6; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .muted { color: #666; }
+    .answer { font-size: 16px; margin: 12px 0; }
+    .chips { display:flex; flex-wrap:wrap; gap: 8px; margin-top: 8px; }
+    .chip { padding: 4px 8px; border-radius: 999px; border:1px solid #ddd; background:#fafafa; }
+    .chip.badge { background:#eef6ff; border-color:#cde5ff; }
+    .list { margin: 8px 0; padding: 0; list-style: none; }
+    .list li { padding: 8px 0; border-bottom: 1px dashed #eee; }
+    .small { font-size: 12px; color:#555; }
+    .warn { color:#b35b00; font-weight:600; }
+    .ok { color:#026e00; font-weight:600; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f7f7; padding:2px 6px; border-radius:6px; border:1px solid #eaeaea; }
+  </style>
+</head>
+<body>
+  <h2>🔎 AegisAI – Policy Copilot</h2>
+  <div class="row">
+    <div class="col card">
+      <form id="askForm">
+        <label>Question</label><br/>
+        <textarea id="q" rows="3" style="width:100%" placeholder="Can I email crew schedules externally?"></textarea><br/><br/>
+        <label>User Grade</label><br/>
+        <input id="grade" placeholder="G7" style="width:120px" />
+        <button type="submit">Ask</button>
+      </form>
+      <div id="err" class="warn" style="margin-top:8px;"></div>
+      <div id="corr" class="small muted" style="margin-top:8px;"></div>
+    </div>
+    <div class="col card">
+      <div class="muted small">Answer</div>
+      <div id="answer" class="answer"></div>
+      <div id="meta" class="chips"></div>
+      <div class="muted small">Citations</div>
+      <ul id="cites" class="list"></ul>
+      <div class="muted small">Highlights</div>
+      <ul id="highlights" class="list"></ul>
+    </div>
+  </div>
 
-        <div class="card">
-            <h3>Policy Question (/ask)</h3>
-            <div class="row">
-            <input id="grade" placeholder="Grade (e.g., G7 or G10)" value="G7" />
-            <input id="question" placeholder="Ask a policy question..." />
-            <button onclick="ask()">Ask</button>
-            </div>
-            <pre id="askOut"></pre>
-        </div>
+<script>
+const API = ''; // same-origin
 
-        <div class="card">
-            <h3>Analyze Logs (/analyze)</h3>
-            <p>Paste JSON array of events or click “Load sample from server”.</p>
-            <div class="row">
-            <button onclick="loadSample()">Load sample from /data/logs.jsonl</button>
-            <button onclick="analyze()">Analyze</button>
-            </div>
-            <textarea id="logs" rows="8" placeholder='[{"event_id":"...", ...}]'></textarea>
-            <pre id="anaOut"></pre>
-        </div>
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text) e.textContent = text;
+  return e;
+}
 
-        <div class="card">
-            <h3>Narrative (/narrative)</h3>
-            <p>Paste the <code>anomalies</code> from /analyze, we’ll wrap them for you.</p>
-            <textarea id="narIn" rows="6" placeholder='{"anomalies":[...]}'></textarea>
-            <button onclick="narrative()">Generate Narrative</button>
-            <pre id="narOut"></pre>
-        </div>
+async function ask(q, user_grade) {
+  const res = await fetch(`${API}/ask`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ query: q, user_grade })
+  });
+  const corr = res.headers.get('X-Correlation-Id') || '';
+  const json = await res.json();
+  return { json, corr, ok: res.ok, status: res.status };
+}
 
-        <script>
-            const API = ''; // same-origin. If your API is elsewhere, set e.g. 'http://localhost:8000'
+function render(data) {
+  // Clear
+  document.getElementById('err').textContent = '';
+  document.getElementById('answer').textContent = '';
+  document.getElementById('meta').innerHTML = '';
+  document.getElementById('cites').innerHTML = '';
+  document.getElementById('highlights').innerHTML = '';
+  document.getElementById('corr').textContent = data.corr ? `Correlation Id: ${data.corr}` : '';
 
-            async function ask(){
-            const grade = document.getElementById('grade').value.trim();
-            const question = document.getElementById('question').value.trim();
-            const r = await fetch(API + '/ask', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ query: question, user_grade: grade })
-            });
-            document.getElementById('askOut').textContent = JSON.stringify(await r.json(), null, 2);
-            }
+  if (!data.ok) {
+    document.getElementById('err').textContent = (data.json && (data.json.detail || data.json.error)) || `HTTP ${data.status}`;
+    return;
+  }
 
-            async function loadSample(){
-            // fetch the raw JSONL file and convert to array
-            const res = await fetch('/data/logs.jsonl');
-            const text = await res.text();
-            const lines = text.trim().split(/\r?\n/).filter(Boolean);
-            const arr = lines.map(l => JSON.parse(l));
-            document.getElementById('logs').value = JSON.stringify(arr, null, 2);
-            }
+  const { answer, citations=[], reasoning, confidence, restricted_probe, risk_reasons=[], highlights=[] } = data.json;
 
-            async function analyze(){
-            let arr;
-            try { arr = JSON.parse(document.getElementById('logs').value); }
-            catch(e){ alert('Provide a JSON array of events'); return; }
-            const r = await fetch(API + '/analyze', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ events: arr })
-            });
-            document.getElementById('anaOut').textContent = JSON.stringify(await r.json(), null, 2);
-            }
+  document.getElementById('answer').textContent = answer || '';
 
-            async function narrative(){
-            let input;
-            try { input = JSON.parse(document.getElementById('narIn').value); }
-            catch(e){ alert('Provide JSON with anomalies or copy from Analyze output'); return; }
-            // If user pasted {"anomalies":[...]}, reshape into expected payload
-            const items = (input.anomalies || []).map(a => ({
-                event: { event_id: a.event_id, role: '', timestamp: '', action: '' },
-                signals: a.signals || [],
-                risk_score: a.risk_score || 0
-            }));
-            const r = await fetch(API + '/narrative', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ items })
-            });
-            document.getElementById('narOut').textContent = JSON.stringify(await r.json(), null, 2);
-            }
-        </script>
-    </body>
+  // badges
+  const meta = document.getElementById('meta');
+  if (reasoning) meta.appendChild(el('span','chip', `Why: ${reasoning}`));
+  if (typeof confidence === 'number') meta.appendChild(el('span','chip badge', `Confidence ${(confidence*100).toFixed(0)}%`));
+  if (restricted_probe) meta.appendChild(el('span','chip warn', 'Restricted probe detected'));
+  if (risk_reasons.length) meta.appendChild(el('span','chip', `Risk: ${risk_reasons.join(' | ')}`));
+
+  // citations
+  const citeList = document.getElementById('cites');
+  citations.forEach(c => {
+    const li = el('li');
+    const head = el('div', null, `${c.policy_id}/${c.clause_id} • ${c.title || c.section || ''}`);
+    const caps = el('div','small muted', `${c.visibility || 'public'} ${Array.isArray(c.allowed_grades) && c.allowed_grades.length ? ' • allowed: '+c.allowed_grades.join(', ') : ''}`);
+    li.appendChild(head);
+    li.appendChild(caps);
+    citeList.appendChild(li);
+  });
+
+  // highlights
+  const hi = document.getElementById('highlights');
+  highlights.forEach(h => {
+    const li = el('li');
+    li.appendChild(el('div', null, `${h.policy_id}/${h.clause_id}`));
+    li.appendChild(el('div','small', h.snippet || ''));
+    hi.appendChild(li);
+  });
+}
+
+document.getElementById('askForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = document.getElementById('q').value.trim();
+  const grade = document.getElementById('grade').value.trim();
+  const data = await ask(q, grade);
+  render(data);
+});
+</script>
+</body>
 </html>
