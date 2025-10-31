@@ -21,7 +21,7 @@ def _get_aoai():
     if _aoai_client is None:
         _aoai_client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         )
     return _aoai_client
