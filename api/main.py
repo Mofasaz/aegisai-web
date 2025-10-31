@@ -25,6 +25,10 @@ app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
 USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
 RULES_FILE = os.getenv("RULES_FILE", "data/rules.yaml")
 
+@app.get("/auth/whoami")
+def whoami(user: UserPrincipal = Depends(require_user)):
+    return user
+    
 @app.get("/me")
 def me(user: UserPrincipal = Depends(require_user)):
     return {
@@ -470,6 +474,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
