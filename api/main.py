@@ -11,6 +11,7 @@ from rules.engine import analyze_events
 from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restricted_hits
 from datetime import datetime, timezone
 from rules.intent import match_risky_intent
+from api.auth import require_user, UserPrincipal
 
 try:
     from integrations.powerbi import push_rows
@@ -24,20 +25,35 @@ except Exception:
 app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
 USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
 
+@app.get("/me")
+def me(user: UserPrincipal = Depends(require_user)):
+    return {
+        "oid": user.oid,
+        "name": user.name,
+        "upn": user.upn,
+        "roles": user.roles,
+        "grade": user.grade
+    }
+
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}  
 
 @app.post("/ask", response_model=AskResponseV2)
-def ask(req: AskRequest, response: Response):
+def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(require_user)):
+    effective_grade = user.grade
+    # fallback: if you still allow body grade for demos
+    if not effective_grade and getattr(req, "user_grade", None):
+        effective_grade = req.user_grade
+        
     # Attach a correlation id for end-to-end tracing (also echoed in JSON)
     corr = str(uuid.uuid4())
     response.headers["X-Correlation-Id"] = corr
     try:
         if USE_VECTOR:
-            chunks = get_chunks_vector(req.query, req.user_grade, top=5, k=20, hybrid=True)
+            chunks = get_chunks_vector(req.query, effective_grade, top=5, k=20, hybrid=True)
         else:
-            chunks = get_chunks(req.query, req.user_grade)  # your existing keyword retriever
+            chunks = get_chunks(req.query, effective_grade)  # your existing keyword retriever
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Policy search failed: {type(e).__name__}: {e}")
 
@@ -63,7 +79,7 @@ def ask(req: AskRequest, response: Response):
             row = {
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "user_id": "",  # fill with AAD UPN later if you add auth
-                "user_grade": (req.user_grade or ""),
+                "user_grade": (effective_grade or ""),
                 "query": req.query,
                 "reason": ";".join(reasons),
                 "restricted_hits": restricted_count,
@@ -188,6 +204,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
