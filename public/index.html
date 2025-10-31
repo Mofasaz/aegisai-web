@@ -5,150 +5,343 @@
     <title>AegisAI — Policy Copilot</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-      body { font-family: system-ui, Arial, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-      .row { display: flex; gap: 0.75rem; }
-      textarea, input { width: 100%; padding: 0.6rem; }
-      button { padding: 0.6rem 1rem; cursor: pointer; }
-      .panel { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-top: 1rem; }
-      .small { color: #666; font-size: 0.9rem; }
-      ul { margin: 0.5rem 0 0 1.25rem; }
-      code { background: #f7f7f7; padding: 0.1rem 0.3rem; border-radius: 4px; }
-      .badge { display: inline-block; padding: 2px 6px; border: 1px solid #ccc; border-radius: 999px; font-size: 0.8rem; margin-left: 6px; }
+      :root{
+        --bg: #0b1020;
+        --panel: #121a2f;
+        --muted: #8ea1b5;
+        --text: #e9eef6;
+        --accent: #4ea1ff;
+        --ok: #16a34a;
+        --warn: #f59e0b;
+        --bad: #ef4444;
+        --chip: #1b2540;
+        --chip-brd:#2a3556;
+        --ring:#2b3b67;
+      }
+      *{ box-sizing: border-box }
+      html,body{ height:100% }
+      body{
+        margin:0; padding:0;
+        background: radial-gradient(1200px 800px at 20% -10%, #1a2650 0%, #0b1020 55%);
+        color:var(--text);
+        font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      }
+      .wrap{ max-width: 1200px; margin: 40px auto; padding: 0 16px; }
+      header{ display:flex; align-items:center; gap:14px; margin-bottom:18px; }
+      header h1{ font-size:20px; margin:0; letter-spacing:.3px }
+      header .brand{
+        width:36px; height:36px; display:grid; place-items:center;
+        border-radius:10px; background:linear-gradient(135deg,#4ea1ff, #7c7cff);
+        color:white; font-weight:700;
+        box-shadow: 0 10px 30px rgba(78,161,255,.35);
+      }
+      .grid{
+        display:grid; gap:16px;
+        grid-template-columns: 1.1fr .9fr;
+      }
+      @media (max-width: 980px){ .grid{ grid-template-columns: 1fr } }
+
+      .panel{
+        background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+        border:1px solid var(--chip-brd);
+        border-radius:16px; padding:16px;
+        backdrop-filter: blur(6px);
+        box-shadow: 0 6px 24px rgba(0,0,0,.25);
+      }
+      .panel h3{ margin:.2rem 0 .6rem 0; font-size:15px }
+      .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+      input, textarea, button{
+        border-radius:12px; border:1px solid var(--ring); color:var(--text);
+        background: #0e152a; outline:none;
+      }
+      input, textarea{ width:100%; padding:10px 12px; }
+      textarea{ resize: vertical; min-height:84px }
+      button{
+        background: linear-gradient(135deg, #4ea1ff, #7c7cff);
+        border:none; padding:10px 16px; font-weight:600; cursor:pointer; color:white;
+        box-shadow: 0 10px 24px rgba(78,161,255,.25);
+      }
+      button:hover{ filter:brightness(1.05) }
+      .small{ color:var(--muted) }
+
+      .card{
+        background: #0f1730;
+        border:1px solid var(--chip-brd);
+        border-radius:14px; padding:12px; margin-top:10px;
+      }
+      .badges{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+      .chip{
+        display:inline-flex; align-items:center; gap:6px;
+        background: var(--chip);
+        border:1px solid var(--chip-brd);
+        color: var(--text);
+        font-size:12px; padding:4px 8px; border-radius:999px;
+      }
+      .chip.ok{    background: rgba(22,163,74,.15);  border-color: rgba(22,163,74,.35);  color:#a6f4c5 }
+      .chip.warn{  background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.35); color:#fde68a }
+      .chip.bad{   background: rgba(239,68,68,.15);  border-color: rgba(239,68,68,.35);  color:#fecaca }
+      .chip.gray{  color:#c7d2fe }
+
+      #answer ul{ margin:.4rem 0 0 1.2rem }
+      #answer li{ margin:.25rem 0; line-height:1.35 }
+      #answer li strong{ font-weight:700 }
+
+      ul.clean{ list-style:none; margin:0; padding:0 }
+      ul.clean li{ padding:.55rem .65rem; border-radius:10px; margin:.3rem 0;
+        background: rgba(255,255,255,.02); border:1px solid var(--chip-brd);
+      }
+      code{
+        background: rgba(255,255,255,.06); padding:2px 6px; border-radius:6px;
+        border:1px solid var(--chip-brd); color:#c7d2fe; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      }
+      details{ margin-top:10px }
+      pre{ white-space:pre-wrap; word-break:break-word; background:#0b1226; padding:12px; border-radius:12px; border:1px solid var(--chip-brd) }
+      .sectionTitle{ display:flex; align-items:center; justify-content:space-between; gap:10px }
     </style>
   </head>
   <body>
-    <h1>AegisAI — Policy Copilot</h1>
+    <div class="wrap">
+      <header>
+        <div class="brand">AI</div>
+        <h1>AegisAI — Policy Copilot</h1>
+      </header>
 
-    <div class="panel">
-      <div class="row">
-        <input id="grade" placeholder="Grade (e.g., Cabin Crew / Pilot / HR Manager)" />
+      <!-- Input panel -->
+      <div class="panel">
+        <div class="row">
+          <input id="grade" placeholder="Grade (e.g., Cabin Crew / Pilot / HR Manager)" />
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <textarea id="q" rows="3" placeholder="Ask a policy question..."></textarea>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button id="askBtn">Ask</button>
+          <span id="status" class="small"></span>
+        </div>
       </div>
-      <div class="row" style="margin-top:0.5rem;">
-        <textarea id="q" rows="3" placeholder="Ask a policy question..."></textarea>
+
+      <!-- Results grid -->
+      <div class="grid" style="margin-top:16px;">
+        <!-- LEFT: Answer & Meta -->
+        <div class="panel" id="leftCol" style="display:none;">
+          <div class="sectionTitle">
+            <h3>Answer</h3>
+            <div class="badges" id="metaBadges"></div>
+          </div>
+          <div id="answer" class="card"></div>
+
+          <details>
+            <summary>Raw JSON</summary>
+            <pre id="raw"></pre>
+          </details>
+        </div>
+
+        <!-- RIGHT: Citations + Highlights -->
+        <div class="panel" id="rightCol" style="display:none;">
+          <div>
+            <h3 style="margin-bottom:.4rem">Citations</h3>
+            <ul id="citations" class="clean"></ul>
+          </div>
+          <div style="margin-top:14px;">
+            <h3 style="margin-bottom:.4rem">Highlights</h3>
+            <ul id="highlights" class="clean"></ul>
+          </div>
+        </div>
       </div>
-      <div class="row" style="margin-top:0.5rem;">
-        <button id="askBtn">Ask</button>
-        <span id="status" class="small"></span>
-      </div>
-    </div>
-
-    <div id="result" class="panel" style="display:none;">
-      <h3>Answer</h3>
-      <div id="answer"></div>
-      <div id="meta" class="small"></div>
-
-      <h3 style="margin-top:1rem;">Citations</h3>
-      <ul id="citations"></ul>
-
-      <h3 style="margin-top:1rem;">Highlights</h3>
-      <ul id="highlights"></ul>
-
-      <details style="margin-top:1rem;">
-        <summary>Raw JSON</summary>
-        <pre id="raw" style="white-space:pre-wrap;"></pre>
-      </details>
     </div>
 
     <script>
-      // If your API is same-origin, leave empty. Else set to your base URL.
-      const API = ''; // e.g. 'https://yourapp.azurewebsites.net'
+      // If your API is same-origin, leave empty
+      const API = '';
 
       const el = (id) => document.getElementById(id);
+      const $left  = () => el('leftCol');
+      const $right = () => el('rightCol');
 
-      function safeArray(x) {
-        if (Array.isArray(x)) return x;
-        return [];
+      function safeArray(x){ return Array.isArray(x) ? x : [] }
+      function text(t){ return (t===null || t===undefined) ? '' : String(t) }
+
+      // ---------- Colored badges ----------
+      function confidenceBadge(conf){
+        if (typeof conf !== 'number') return '';
+        const pct = Math.round(conf*100);
+        let cls = 'warn';
+        if (conf >= 0.80) cls = 'ok';
+        else if (conf < 0.50) cls = 'bad';
+        return `<span class="chip ${cls}">Confidence: ${pct}%</span>`;
       }
 
-      function text(t) {
-        return (t === null || t === undefined) ? '' : String(t);
+      function visibilityBadge(vis){
+        const v = (vis||'').toLowerCase();
+        if (v === 'restricted') return `<span class="chip bad">Restricted</span>`;
+        if (v === 'internal')   return `<span class="chip warn">Internal</span>`;
+        if (v === 'public')     return `<span class="chip ok">Public</span>`;
+        return `<span class="chip gray">${vis||'—'}</span>`;
       }
 
-      function renderResult(data) {
-        el('result').style.display = 'block';
+      function correlationBadge(id){
+        if (!id) return '';
+        return `<span class="chip gray">Corr: ${id.slice(0,8)}</span>`;
+      }
+
+      function reasonsBadge(reasons){
+        const arr = safeArray(reasons);
+        if (!arr.length) return '';
+        return `<span class="chip warn">Reasons: ${arr.join('; ')}</span>`;
+      }
+
+      // ---------- Bullet rendering with bold clause ids ----------
+      function bulletsHTML(ans) {
+        const lines = ans.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (!lines.length) return '';
+
+        const bulletLines = looksLikeList(lines) ? lines : splitIntoSentences(ans);
+
+        const lis = bulletLines
+          .map(s => sanitize(s.replace(/^[-*•\d.)]+\s*/, '')))
+          .filter(Boolean)
+          .map(s => `<li>${formatClauseBold(s)}</li>`)
+          .join('');
+
+        return `<ul>${lis}</ul>`;
+      }
+      function looksLikeList(lines) {
+        const hits = lines.filter(l => /^(\*|-|•|\d+[.)])\s+/.test(l)).length;
+        return hits >= 2;
+      }
+      function splitIntoSentences(text) {
+        const parts = text
+          .replace(/\n+/g, ' ')
+          .split(/(?<=[.?!\]])\s+(?=[A-Z[(])/)
+          .map(s => s.trim()).filter(Boolean);
+        if (parts.length < 3) return text.split(/,\s+/).map(s => s.trim()).filter(Boolean);
+        return parts;
+      }
+      function formatClauseBold(safeText) {
+        const m = safeText.match(/\[[^\[\]\n\/]+\/[^\[\]\n]+\]/);
+        if (!m) return safeText;
+        return safeText.replace(m[0], `<strong>${m[0]}</strong>`);
+      }
+      function sanitize(s){
+        return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      }
+
+      // ---------- Rendering ----------
+      function renderBadges(data){
+        const bits = [];
+        bits.push(confidenceBadge(data.confidence));
+        bits.push(correlationBadge(data.correlation_id));
+        if (data.restricted_probe) bits.push(`<span class="chip bad">Restricted Probe</span>`);
+        if (safeArray(data.risk_reasons).length) bits.push(reasonsBadge(data.risk_reasons));
+        return bits.filter(Boolean).join(' ');
+      }
+
+      function renderCitations(cites){
+        const ul = el('citations');
+        ul.innerHTML = '';
+        if (!cites.length){
+          ul.innerHTML = `<li class="small">None</li>`;
+          return;
+        }
+        cites.forEach(c=>{
+          const grades = Array.isArray(c.allowed_grades) ? ` <span class="chip gray">grades: ${c.allowed_grades.join(', ')}</span>` : '';
+          const vis = visibilityBadge(c.visibility);
+          const title = c.title ? ` — ${sanitize(c.title)}` : '';
+          const sec = c.section ? ` — ${sanitize(c.section)}` : '';
+          const li = document.createElement('li');
+          li.innerHTML = `<code>[${sanitize(c.policy_id)}/${sanitize(c.clause_id)}]</code>${title}${sec} ${vis}${grades}`;
+          ul.appendChild(li);
+        });
+      }
+
+      function renderHighlights(items, citesByKey){
+        const ul = el('highlights');
+        ul.innerHTML = '';
+        if (!items.length){
+          ul.innerHTML = `<li class="small">None</li>`;
+          return;
+        }
+        items.forEach(h=>{
+          const key = `${h.policy_id}/${h.clause_id}`;
+          const meta = citesByKey.get(key) || {};
+          const vis = visibilityBadge(meta.visibility);
+          const snip = sanitize(h.snippet || '');
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <div class="row" style="justify-content:space-between; align-items:flex-start;">
+              <div>
+                <div><code>[${sanitize(h.policy_id)}/${sanitize(h.clause_id)}]</code></div>
+                <div class="small" style="margin-top:4px">${snip}</div>
+              </div>
+              <div>${vis}</div>
+            </div>
+          `;
+          ul.appendChild(li);
+        });
+      }
+
+      function renderResult(data){
+        // show columns
+        $left().style.display = 'block';
+        $right().style.display = 'block';
+
+        // raw json
         el('raw').textContent = JSON.stringify(data, null, 2);
 
-        // v1/v2 compatibility — answer is the same key
-        el('answer').textContent = text(data.answer);
+        // badges
+        el('metaBadges').innerHTML = renderBadges(data);
 
-        // Optional meta line (confidence, correlation id, flags)
-        const metaBits = [];
-        if (typeof data.confidence === 'number') metaBits.push(`confidence: ${(data.confidence*100).toFixed(0)}%`);
-        if (data.correlation_id) metaBits.push(`corr: ${data.correlation_id}`);
-        if (data.restricted_probe) metaBits.push('restricted-probe');
-        if (safeArray(data.risk_reasons).length) metaBits.push(`reasons: ${data.risk_reasons.join('; ')}`);
-        el('meta').textContent = metaBits.join('  •  ');
+        // answer as bullets
+        el('answer').innerHTML = bulletsHTML(text(data.answer));
 
-        // Citations (snake_case keys per backend)
-        const cites = safeArray(data.citations || data.Citations);
-        const ulC = el('citations');
-        ulC.innerHTML = '';
-        if (cites.length === 0) {
-          ulC.innerHTML = '<li class="small">None</li>';
-        } else {
-          cites.forEach(c => {
-            const li = document.createElement('li');
-            const title = c.title ? ` — ${c.title}` : '';
-            const grades = Array.isArray(c.allowed_grades) ? ` <span class="badge">grades: ${c.allowed_grades.join(', ')}</span>` : '';
-            const vis = c.visibility ? ` <span class="badge">${c.visibility}</span>` : '';
-            li.innerHTML = `<code>[${c.policy_id}/${c.clause_id}]</code>${title} — ${c.section || ''}${vis}${grades}`;
-            ulC.appendChild(li);
-          });
-        }
+        // citations + highlights
+        const citations = safeArray(data.citations || data.Citations);
+        renderCitations(citations);
 
-        // Highlights
-        const hl = safeArray(data.highlights || data.Highlights);
-        const ulH = el('highlights');
-        ulH.innerHTML = '';
-        if (hl.length === 0) {
-          ulH.innerHTML = '<li class="small">None</li>';
-        } else {
-          hl.forEach(h => {
-            const li = document.createElement('li');
-            li.innerHTML = `<code>[${h.policy_id}/${h.clause_id}]</code> ${h.snippet ? h.snippet : ''}`;
-            ulH.appendChild(li);
-          });
-        }
+        const citesByKey = new Map(citations.map(c=>[`${c.policy_id}/${c.clause_id}`, c]));
+        const highlights = safeArray(data.highlights || data.Highlights);
+        renderHighlights(highlights, citesByKey);
       }
 
-      async function doAsk() {
+      // ---------- API ----------
+      async function doAsk(){
         el('status').textContent = 'Asking…';
-        el('result').style.display = 'none';
+        $left().style.display = 'none';
+        $right().style.display = 'none';
 
         const payload = {
           query: el('q').value.trim(),
           user_grade: el('grade').value.trim() || null
         };
 
-        try {
+        try{
           const res = await fetch(`${API}/ask`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(payload)
           });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
+          if(!res.ok){
+            const err = await res.json().catch(()=> ({}));
             throw new Error(err.detail || `${res.status} ${res.statusText}`);
           }
           const data = await res.json();
           renderResult(data);
           el('status').textContent = 'Done';
-        } catch (e) {
+        }catch(e){
           el('status').textContent = 'Error';
-          el('result').style.display = 'block';
-          el('answer').textContent = '';
+          $left().style.display = 'block';
+          $right().style.display = 'none';
+          el('answer').innerHTML = `<div class="card">⚠️ ${sanitize(String(e))}</div>`;
+          el('raw').textContent = '';
           el('citations').innerHTML = '';
           el('highlights').innerHTML = '';
-          el('raw').textContent = String(e);
         }
       }
 
-      el('askBtn').addEventListener('click', doAsk);
-      // Optional: submit on Ctrl+Enter in textarea
-      el('q').addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
-          doAsk();
-        }
+      document.getElementById('askBtn').addEventListener('click', doAsk);
+      document.getElementById('q').addEventListener('keydown', (ev)=>{
+        if(ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)){ doAsk(); }
       });
     </script>
   </body>
