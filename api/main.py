@@ -232,6 +232,8 @@ def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(requi
         restricted_probe=("restricted_probe" in reasons),
         risk_reasons=(reasons_ext or None),
         correlation_id=corr,
+        judge_score=float(judge.get("grounding_score", 0.6)),
+        judge_issues=judge.get("issues") or None,
     )   
     #    if not chunks:
     #        return AskResponse(answer="No matching policy content found.", citations=[])
@@ -295,6 +297,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
