@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # /ask
 class AskRequest(BaseModel):
@@ -20,18 +20,6 @@ class AskResponse(BaseModel):
 
 # /analyze
 class LogEvent(BaseModel):
-    event_id: str
-    user_dept: str
-    role: str
-    timestamp: str
-    action: str
-    resource: Optional[str] = None
-    target: Optional[str] = None
-    source_ip: Optional[str] = None
-    auth: Optional[Dict[str, Any]] = None
-    risk_context: Optional[Dict[str, Any]] = None
-
-class LogEvent(BaseModel):
     # core
     event_id: str
     timestamp: str                  # ISO8601 with Z or ±offset
@@ -51,9 +39,12 @@ class LogEvent(BaseModel):
     auth: Optional[Dict[str, Any]] = None
     risk_context: Optional[Dict[str, Any]] = None
 
-    class Config:
-        allow_population_by_field_name = True
-        extra = "allow"
+    # v2 style
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    
+class Config:
+    allow_population_by_field_name = True
+    extra = "allow"
 
 class Anomaly(BaseModel):
     event_id: str
@@ -114,6 +105,7 @@ class AnomalyPushRequest(BaseModel):
 class AnomalyPushResponse(BaseModel):
     status: str
     count: int
+
 
 
 
