@@ -35,6 +35,8 @@ class AskResponseV2(BaseModel):
     restricted_probe: Optional[bool] = None
     risk_reasons: Optional[List[str]] = None
     correlation_id: Optional[str] = None
+    judge_score: Optional[float] = None         # raw groundedness from the LLM judge (0..1)
+    judge_issues: Optional[List[str]] = None    # textual notes the judge returned
 
 # /analyze
 class LogEvent(BaseModel):
@@ -123,6 +125,7 @@ class AnomalyPushRequest(BaseModel):
 class AnomalyPushResponse(BaseModel):
     status: str
     count: int
+
 
 
 
