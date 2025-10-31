@@ -126,6 +126,25 @@ class AnomalyPushResponse(BaseModel):
     status: str
     count: int
 
+# ---------- Rules: Suggest / Apply ----------
+
+class RuleSuggestRequest(BaseModel):
+    prompt: str
+    category: Optional[str] = None     # e.g., "access", "auth", "download"
+    severity: Optional[str] = None     # e.g., "low"|"medium"|"high"|"critical"
+
+class RuleSuggestResponse(BaseModel):
+    yaml: str
+    parsed: Optional[Dict[str, Any]] = None
+    warnings: Optional[List[str]] = None
+
+class RuleApplyRequest(BaseModel):
+    yaml: str
+
+class RuleApplyResponse(BaseModel):
+    status: str
+    message: Optional[str] = None
+
 
 
 
