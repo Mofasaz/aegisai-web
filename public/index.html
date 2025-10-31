@@ -98,6 +98,56 @@
       details{ margin-top:10px }
       pre{ white-space:pre-wrap; word-break:break-word; background:#0b1226; padding:12px; border-radius:12px; border:1px solid var(--chip-brd) }
       .sectionTitle{ display:flex; align-items:center; justify-content:space-between; gap:10px }
+      /* Judge extras */
+      .issue-badge{
+        display:inline-flex; align-items:center;
+        background: rgba(255,255,255,.05);
+        border:1px solid var(--chip-brd);
+        color:#fca5a5;
+        font-size:12px; padding:3px 8px; border-radius:8px;
+      }
+
+      /* spacing tweaks for the meta badges row */
+      .badges { gap: 10px; row-gap: 8px; }
+      
+      /* issue badges with subtle hover + tooltip */
+      .issue-badge{
+        position:relative;
+        display:inline-flex; align-items:center;
+        background: rgba(255,255,255,.05);
+        border:1px solid var(--chip-brd);
+        color:#fca5a5;
+        font-size:12px; padding:3px 8px; border-radius:8px;
+        transition: transform .12s ease, background .12s ease;
+      }
+      .issue-badge:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); }
+      
+      /* Tooltip: uses data-tip attr */
+      .issue-badge[data-tip]::after{
+        content: attr(data-tip);
+        position:absolute; left:0; top: calc(100% + 6px);
+        background:#0b1226; color:#e9eef6;
+        border:1px solid var(--chip-brd);
+        padding:6px 8px; border-radius:8px;
+        font-size:12px; line-height:1.25; white-space:nowrap;
+        opacity:0; transform: translateY(-4px);
+        pointer-events:none; transition: opacity .12s ease, transform .12s ease;
+        z-index: 30;
+        box-shadow: 0 8px 20px rgba(0,0,0,.35);
+      }
+      .issue-badge[data-tip]:hover::after{ opacity:1; transform: translateY(0); }
+      
+      /* Optional: tooltip arrow */
+      .issue-badge[data-tip]::before{
+        content:"";
+        position:absolute; left:12px; top: calc(100% + 2px);
+        width:8px; height:8px; background:#0b1226;
+        border-left:1px solid var(--chip-brd); border-top:1px solid var(--chip-brd);
+        transform: rotate(45deg); z-index: 31;
+        opacity:0; transition: opacity .12s ease;
+      }
+      .issue-badge[data-tip]:hover::before{ opacity:1; }
+
     </style>
   </head>
   <body>
@@ -169,7 +219,7 @@
         let cls = 'warn';
         if (conf >= 0.80) cls = 'ok';
         else if (conf < 0.50) cls = 'bad';
-        return `<span class="chip ${cls}">Confidence: ${pct}%</span>`;
+        return `<span class="chip ${cls}" title="Blended retrieval + judge signal">Confidence: ${pct}%</span>`;
       }
 
       function visibilityBadge(vis){
@@ -189,6 +239,37 @@
         const arr = safeArray(reasons);
         if (!arr.length) return '';
         return `<span class="chip warn">Reasons: ${arr.join('; ')}</span>`;
+      }
+
+      /* Optional: friendly explanations for common judge / risk notes */
+      const ISSUE_TIPS = {
+        judge_error: "Judge fallback used. Confidence blended with retrieval heuristics.",
+        hallucination: "Answer contains facts that weren't in the provided snippets.",
+        weak_grounding: "Answer loosely supported by snippets; consider rephrasing or narrowing the query.",
+        restricted_probe: "Your query matched restricted clauses you’re not allowed to view.",
+        mismatch_scope: "Question scope doesn't match policy scope (e.g., HR vs IT).",
+        vague_query: "Query is too broad; add system, role, or action to improve grounding."
+      };
+
+      /* Build a colored “Judge: XX%” chip (unchanged) */
+      function judgeScoreBadge(score){
+        if (typeof score !== 'number') return '';
+        const pct = Math.round(score*100);
+        let cls = 'warn';
+        if (score >= 0.80) cls = 'ok';
+        else if (score < 0.50) cls = 'bad';
+        return `<span class="chip ${cls}" title="Groundedness from LLM judge">${pct}% Judge</span>`;
+      }
+
+      /* Issue badges with tooltips via data-tip */
+      function judgeIssuesBadges(issues){
+        const arr = Array.isArray(issues) ? issues : [];
+        if (!arr.length) return '';
+        return arr.map(code => {
+          const t = String(code);
+          const tip = ISSUE_TIPS[t] || "Signal flagged by judge.";
+          return `<span class="issue-badge" role="note" aria-label="${sanitize(t)}" data-tip="${sanitize(tip)}">${sanitize(t)}</span>`;
+        }).join(' ');
       }
 
       // ---------- Bullet rendering with bold clause ids ----------
@@ -231,9 +312,12 @@
       function renderBadges(data){
         const bits = [];
         bits.push(confidenceBadge(data.confidence));
+        bits.push(judgeScoreBadge(data.judge_score)); // NEW
+        if (data.restricted_probe) bits.push(`<span class="chip bad" title="Query matched restricted clauses">Restricted Probe</span>`);
+        if (Array.isArray(data.risk_reasons) && data.risk_reasons.length) bits.push(reasonsBadge(data.risk_reasons));
         bits.push(correlationBadge(data.correlation_id));
-        if (data.restricted_probe) bits.push(`<span class="chip bad">Restricted Probe</span>`);
-        if (safeArray(data.risk_reasons).length) bits.push(reasonsBadge(data.risk_reasons));
+        const issues = judgeIssuesBadges(data.judge_issues); // NEW
+        if (issues) bits.push(issues);
         return bits.filter(Boolean).join(' ');
       }
 
@@ -346,3 +430,4 @@
     </script>
   </body>
 </html>
+
