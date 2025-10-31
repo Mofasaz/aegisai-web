@@ -1,6 +1,9 @@
 import os
 from azure.search.documents import SearchClient
 from azure.core.credentials import AzureKeyCredential
+from azure.search.documents.models import VectorizedQuery
+from azure.core.exceptions import HttpResponseError
+from openai import AzureOpenAI
 
 ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 INDEX    = os.getenv("AZURE_SEARCH_INDEX")
@@ -10,6 +13,14 @@ if not all([ENDPOINT, INDEX, KEY]):
     raise RuntimeError("Azure Search is not configured: set AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_INDEX, AZURE_SEARCH_API_KEY")
     
 _client = SearchClient(endpoint=ENDPOINT, index_name=INDEX, credential=AzureKeyCredential(KEY))
+
+# Embedding client
+_aoai = AzureOpenAI(
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+)
+_EMBED_DEPLOY = os.getenv("AZURE_OPENAI_EMBED_DEPLOYMENT")  # e.g., textemb3 (1536 dims)
 
 def _normalize_grade(g: str) -> str:
     g = (g or "").strip().upper()
@@ -21,6 +32,69 @@ def _doc_get(d, k, default=None):
         return d[k]
     except Exception:
         return getattr(d, k, default)
+
+def _embed_query(text: str) -> list[float]:
+    out = _aoai.embeddings.create(model=_EMBED_DEPLOY, input=text)
+    return out.data[0].embedding
+
+def get_chunks_vector(query: str, user_grade: str, top: int = 5, k: int = 20, hybrid: bool = True):
+    """
+    Vector or hybrid (text + vector) retrieval using 'embedding' field.
+    - top: final number of docs returned to caller
+    - k: neighbors to pull from vector stage before optional hybrid re-rank on server
+    """
+    g = _normalize_grade(user_grade)
+    flt = f"allowed_grades/any(x: x eq '{g}')"
+
+    qvec = _embed_query(query)
+    vq = VectorizedQuery(vector=qvec, k_nearest_neighbors=k, fields="embedding")
+
+    try:
+        if hybrid:
+            # HYBRID: combine sparse (text) + dense (vector)
+            results = _client.search(
+                search_text=query,                  # sparse term matching
+                vector_queries=[vq],                # dense vector nearest neighbors
+                filter=flt,
+                query_type="simple",
+                top=top,
+                select=[
+                    "policy_id","clause_id","clause_text","section",
+                    "visibility","allowed_grades","department","title"
+                ],
+            )
+        else:
+            # VECTOR-ONLY
+            results = _client.search(
+                search_text=None,
+                vector_queries=[vq],
+                filter=flt,
+                top=top,
+                select=[
+                    "policy_id","clause_id","clause_text","section",
+                    "visibility","allowed_grades","department","title"
+                ],
+            )
+
+        out = []
+        for r in results:
+            out.append({
+                "policy_id":       _doc_get(r, "policy_id"),
+                "clause_id":       _doc_get(r, "clause_id"),
+                "title":           _doc_get(r, "title"),
+                "section":         _doc_get(r, "section"),
+                "clause_text":     _doc_get(r, "clause_text"),
+                "visibility":      _doc_get(r, "visibility"),
+                "allowed_grades":  _doc_get(r, "allowed_grades") or [],
+                "department":      _doc_get(r, "department"),
+                # Optional: include scores
+                # "score":           _doc_get(r, "@search.score")
+            })
+        return out
+
+    except HttpResponseError as e:
+        # Bubble up for clearer error in /ask
+        raise
 
 def get_chunks(query: str, user_grade: str, top: int = 5):
     g = _normalize_grade(user_grade)
