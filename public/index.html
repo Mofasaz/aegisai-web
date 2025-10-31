@@ -174,9 +174,10 @@
       <!-- Propose Rule panel -->
       <div class="panel" style="margin-top:16px;">
         <div class="sectionTitle">
-          <h3>Propose Rule</h3> <button id="btnReload" class="chip" style="margin-left:auto;">Reload Rules</button>
-          <span class="small">Turn natural language into a YAML rule, then approve.</span>
+          <h3>Propose Rule</h3> 
+          <button id="btnReload" type="button" class="chip" aria-label="Reload rules" style="margin-left:auto;">Reload Rules</button>
         </div>
+        <div class="small" style="margin-top:6px;">Turn natural language into a YAML rule, then approve.</div>
         <div class="row" style="margin-top:8px;">
           <textarea id="rulePrompt" rows="3" placeholder="Describe the rule you want (e.g., 'Flag off-hour access to Crew Scheduling Portal by Cabin Crew with >10 shift hours and >2 failed logins in last 30 days')"></textarea>
         </div>
@@ -530,6 +531,7 @@
     </script>
   </body>
 </html>
+
 
 
 
