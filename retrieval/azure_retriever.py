@@ -6,6 +6,9 @@ ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT")
 INDEX    = os.getenv("AZURE_SEARCH_INDEX")
 KEY      = os.getenv("AZURE_SEARCH_API_KEY")
 
+if not all([ENDPOINT, INDEX, KEY]):
+    raise RuntimeError("Azure Search is not configured: set AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_INDEX, AZURE_SEARCH_API_KEY")
+    
 _client = SearchClient(endpoint=ENDPOINT, index_name=INDEX, credential=AzureKeyCredential(KEY))
 
 def _normalize_grade(g: str) -> str:
