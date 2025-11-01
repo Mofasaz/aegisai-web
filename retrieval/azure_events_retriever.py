@@ -52,31 +52,34 @@ def get_events_by_ids(ids: List[str]) -> List[Dict[str, Any]]:
         pass
 
     # 2) Fallback: OR-filter in small batches
-    def _fetch_batch(batch: List[str]) -> None:
-        parts = [f"event_id eq '{x.replace(\"'\",\"''\")}'" for x in batch]
-        flt = " or ".join(parts)
-        results = _evt_client.search(
-            search_text="*",
-            filter=flt,
-            query_type="simple",
-            top=len(batch),
-            select=["event_id","timestamp","action","status","user_role","system","location"]
-        )
-        for r in results:
-            out.append({
-                "event_id": r.get("event_id"),
-                "timestamp": r.get("timestamp"),
-                "action": r.get("action"),
-                "status": r.get("status"),
-                "user_role": r.get("user_role"),
-                "system": r.get("system"),
-                "location": r.get("location"),
-            })
+    def _fetch_batch(batch: list[str]) -> list[dict]:
+    if not batch:
+        return []
+    # Escape single quotes for OData literal strings
+    parts = [f"event_id eq '{x.replace(\"'\",\"''\")}'" for x in batch]
+    flt = " or ".join(parts)
 
-    BATCH = 50
-    for i in range(0, len(ids), BATCH):
-        _fetch_batch(ids[i:i+BATCH])
+    results = _evt_client.search(
+        search_text="*",
+        filter=flt,
+        query_type="simple",
+        top=len(batch),
+        select=["event_id","timestamp","action","status","user_role","system","location"],
+    )
 
+    out = []
+    for r in results:
+        # r is a SearchResult; .get works if it’s dict-like, else use getattr fallback
+        get = r.get if hasattr(r, "get") else lambda k, d=None: getattr(r, k, d)
+        out.append({
+            "event_id":  get("event_id"),
+            "timestamp": get("timestamp"),
+            "action":    get("action"),
+            "status":    get("status"),
+            "user_role": get("user_role"),
+            "system":    get("system"),
+            "location":  get("location"),
+        })
     return out
 
 
