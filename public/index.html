@@ -253,6 +253,53 @@
             <ul id="highlights" class="clean"></ul>
           </div>
         </div>
+        <!-- Detect & Narrate -->
+        <div class="panel" style="margin-top:16px;">
+          <div class="sectionTitle">
+            <h3>Detect &amp; Narrate</h3>
+            <span class="small">Query logs → detect anomalies → generate narratives</span>
+          </div>
+        
+          <!-- Query row -->
+          <div class="row" style="margin-top:8px;">
+            <input id="an_q" placeholder="Query (e.g., login failed OR access_denied). Leave empty for all." />
+            <input id="an_from" type="datetime-local" />
+            <input id="an_to" type="datetime-local" />
+            <input id="an_top" type="number" min="1" max="500" value="50" style="max-width:110px" />
+            <button id="btnAnalyze">Analyze</button>
+          </div>
+          <div id="an_status" class="small" style="margin-top:6px;"></div>
+        
+          <!-- Anomalies table -->
+          <div id="an_results" class="card" style="margin-top:10px; display:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <h4 style="margin:.2rem 0;">Anomalies</h4>
+              <div class="row">
+                <button id="btnNarrate" disabled>Narrate selected</button>
+              </div>
+            </div>
+            <div class="small" style="color:var(--muted); margin-bottom:6px;">Select rows and click “Narrate selected”.</div>
+            <table id="an_table" style="width:100%; border-collapse:collapse;">
+              <thead>
+                <tr style="text-align:left;">
+                  <th></th>
+                  <th>Event</th>
+                  <th>Signals</th>
+                  <th>Risk</th>
+                  <th>Explain</th>
+                </tr>
+              </thead>
+              <tbody id="an_body"></tbody>
+            </table>
+          </div>
+        
+          <!-- Narratives -->
+          <div id="an_narr" class="card" style="margin-top:10px; display:none;">
+            <h4 style="margin:.2rem 0;">Narratives</h4>
+            <ul id="an_narr_list" class="clean"></ul>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -558,9 +605,128 @@
       
       document.getElementById('btnSuggest').addEventListener('click', doSuggestRule);
       document.getElementById('btnApply').addEventListener('click', doApplyRule);
+
+      // -------- Detect & Narrate state --------
+      let ANOMALIES = []; // last analyze results
+    
+      const $ = (id) => document.getElementById(id);
+      const td = (html) => { const x=document.createElement('td'); x.innerHTML=html; return x; };
+    
+      function riskChip(score){
+        let cls = 'warn';
+        if (score >= 80) cls = 'bad';
+        else if (score <= 40) cls = 'ok';
+        return `<span class="chip ${cls}">${score}</span>`;
+      }
+    
+      function renderAnomalies(rows){
+        const body = $('an_body');
+        body.innerHTML = '';
+        rows.forEach((a, i) => {
+          const tr = document.createElement('tr');
+          tr.style.borderTop = '1px solid var(--chip-brd)';
+          const chk = `<input type="checkbox" data-i="${i}" class="an_sel" />`;
+          tr.appendChild(td(chk));
+          tr.appendChild(td(`<code>${sanitize(a.event_id)}</code>`));
+          tr.appendChild(td(`${sanitize((a.signals||[]).join(', '))}`));
+          tr.appendChild(td(riskChip(a.risk_score)));
+          tr.appendChild(td(`<span class="small">${sanitize(a.explain||'')}</span>`));
+          body.appendChild(tr);
+        });
+        $('an_results').style.display = rows.length ? 'block' : 'none';
+        $('btnNarrate').disabled = !rows.length;
+        $('an_narr').style.display = 'none';
+        $('an_narr_list').innerHTML = '';
+      }
+    
+      async function doAnalyze(){
+        $('an_status').textContent = 'Searching & detecting…';
+        $('an_results').style.display = 'none';
+        $('an_narr').style.display = 'none';
+        $('an_narr_list').innerHTML = '';
+    
+        const q = $('an_q').value.trim() || null;
+        const from = $('an_from').value ? new Date($('an_from').value).toISOString() : null;
+        const to   = $('an_to').value   ? new Date($('an_to').value).toISOString()   : null;
+        const top  = Number($('an_top').value || 50);
+    
+        try{
+          const res = await fetch(`${API}/analyze`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ query: q, time_min: from, time_max: to, top })
+          });
+          if(!res.ok){
+            const err = await res.json().catch(()=> ({}));
+            throw new Error(err.detail || `${res.status} ${res.statusText}`);
+          }
+          const data = await res.json();  // { anomalies: [...] }
+          ANOMALIES = Array.isArray(data.anomalies) ? data.anomalies : [];
+          renderAnomalies(ANOMALIES);
+          $('an_status').textContent = `Detected ${ANOMALIES.length} anomalies`;
+        }catch(e){
+          $('an_status').textContent = `Error: ${String(e)}`;
+        }
+      }
+    
+      async function doNarrateSelected(){
+        const checks = Array.from(document.querySelectorAll('.an_sel')).filter(x => x.checked);
+        if (!checks.length) return;
+        const items = checks.map(t => {
+          const i = Number(t.getAttribute('data-i'));
+          const a = ANOMALIES[i];
+          return {
+            event_id: a.event_id,
+            signals:  a.signals || [],
+            risk_score: a.risk_score || 0
+          };
+        });
+    
+        try{
+          const res = await fetch(`${API}/narrative/from_anomalies`, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ items })
+          });
+          if(!res.ok){
+            const err = await res.json().catch(()=> ({}));
+            throw new Error(err.detail || `${res.status} ${res.statusText}`);
+          }
+          const data = await res.json(); // { items: [ { event_id, narrative, remediation[], linked_policies[] } ] }
+          const ul = $('an_narr_list');
+          ul.innerHTML = '';
+          (data.items || []).forEach(n => {
+            const li = document.createElement('li');
+            const pol = (n.linked_policies||[]).map(p => `<code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code>`).join(' ');
+            const rem = (n.remediation||[]).map(r => `<li>${sanitize(r)}</li>`).join('');
+            li.innerHTML = `
+              <div class="card">
+                <div class="row" style="justify-content:space-between;">
+                  <div><strong>Event:</strong> <code>${sanitize(n.event_id)}</code></div>
+                  <div class="chip gray">${pol || 'no linked policies'}</div>
+                </div>
+                <div style="margin-top:6px;">${sanitize(n.narrative)}</div>
+                <div style="margin-top:8px;">
+                  <div class="small" style="opacity:.8;margin-bottom:4px;">Remediation</div>
+                  <ul style="margin:0 0 0 1.1rem;">${rem}</ul>
+                </div>
+              </div>`;
+            ul.appendChild(li);
+          });
+          $('an_narr').style.display = 'block';
+        }catch(e){
+          const ul = $('an_narr_list');
+          ul.innerHTML = `<li class="small">Error: ${sanitize(String(e))}</li>`;
+          $('an_narr').style.display = 'block';
+        }
+      }
+    
+      $('btnAnalyze').addEventListener('click', doAnalyze);
+      $('btnNarrate').addEventListener('click', doNarrateSelected);
     </script>
   </body>
 </html>
+
 
 
 
