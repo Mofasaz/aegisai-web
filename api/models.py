@@ -74,6 +74,11 @@ class Anomaly(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     events: List[LogEvent]
+    # NEW (optional) — if events are not supplied, the API will fetch from Azure Search
+    query: Optional[str] = None          # e.g., "login failed" or "*" for all
+    time_min: Optional[str] = None       # ISO8601, e.g., "2025-10-23T00:00:00Z"
+    time_max: Optional[str] = None       # ISO8601, e.g., "2025-10-26T00:00:00Z"
+    top: Optional[int] = 50              # cap number of events fetched
 
 class AnalyzeResponse(BaseModel):
     anomalies: List[Anomaly]
@@ -144,6 +149,7 @@ class RuleApplyRequest(BaseModel):
 class RuleApplyResponse(BaseModel):
     status: str
     message: Optional[str] = None
+
 
 
 
