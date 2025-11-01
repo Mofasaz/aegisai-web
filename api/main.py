@@ -1,6 +1,6 @@
 import os, uuid, json, re, yaml
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Response, Depends
+from fastapi import FastAPI, HTTPException, Response, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
@@ -29,10 +29,22 @@ RULES_FILE = os.getenv("RULES_FILE", "data/rules.yaml")
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    # Return detailed reasons instead of a generic 422
+    """
+    Return detailed Pydantic validation errors so 422s are explainable.
+    Shows which field failed and echoes the raw body that caused it.
+    """
+    try:
+        body_bytes = await request.body()
+        body_text = body_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        body_text = "<unavailable>"
+
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "body": await request.body()},
+        content={
+            "detail": exc.errors(),   # list of error objects with loc/msg/type
+            "body": body_text         # raw request body to help debugging
+        },
     )
     
 @app.get("/auth/whoami")
@@ -551,6 +563,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
