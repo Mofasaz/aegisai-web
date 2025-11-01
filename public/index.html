@@ -317,21 +317,34 @@
       // If your API is same-origin, leave empty
       const API = '';
 
+      // Answer visibility state
+      let HAS_RESULT = false;
+      const tileAsk    = document.getElementById('tile-ask');
+      const tileResult = document.getElementById('tile-result');
+
       // ---------- Tile focus logic ----------
       let ACTIVE = 'ask';
       function focusTile(name){
         ACTIVE = name;
-        for(const t of document.querySelectorAll('.tile')){
+      
+        // Show Answer tile only when Ask is active AND we already have a result
+        if (tileResult) {
+          tileResult.style.display = (name === 'ask' && HAS_RESULT) ? '' : 'none';
+        }
+      
+        // Normal active/collapsed behavior for the rest
+        for (const t of document.querySelectorAll('.tile')) {
           const key = t.getAttribute('data-tile');
-          if(key === name){
+          if (key === name) {
             t.classList.add('active');
             t.classList.remove('collapsed');
-          }else{
+          } else {
             t.classList.remove('active');
             t.classList.add('collapsed');
           }
         }
       }
+
 
       const el = (id) => document.getElementById(id);
       const $left  = () => el('tile-result'); // keep compatibility for show/hide
@@ -491,7 +504,7 @@
 
       function renderResult(data){
         // Ensure result tile is visible
-        focusTile('result');
+        //focusTile('result');
 
         // raw json
         el('raw').textContent = JSON.stringify(data, null, 2);
@@ -512,6 +525,11 @@
 
         // header KPIs
         updateResultKPIs(data);
+
+        HAS_RESULT = true;
+        // Ensure we're on the Ask tile so Answer becomes visible
+        focusTile('ask');
+
       }
 
       // ---------- API ----------
@@ -530,8 +548,14 @@
           renderResult(data);
           el('status').textContent = 'Done';
         }catch(e){
+          // ----- ERROR PATH
+          HAS_RESULT = false;                // hide Answer tile unless a future success happens
+          focusTile(ACTIVE || 'ask');        // re-apply layout; Answer tile will hide if not 'ask'
+          // -------------------------------------------
           el('status').textContent = 'Error';
-          focusTile('result');
+          //focusTile('result');
+          $left().style.display = 'block';
+          $right().style.display = 'none';
           el('answer').innerHTML = `<div class="card">⚠️ ${sanitize(String(e))}</div>`;
           el('raw').textContent = '';
           el('citations').innerHTML = '';
@@ -713,3 +737,4 @@
     </script>
   </body>
 </html>
+
