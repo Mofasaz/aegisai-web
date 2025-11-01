@@ -8,6 +8,7 @@ from api.models import *
 from api.chains import get_llm
 from rules.engine import analyze_events, load_rules_from_file, set_rules, get_rules
 from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restricted_hits
+from retrieval.azure_events_retriever import search_events
 from datetime import datetime, timezone
 from rules.intent import match_risky_intent
 from api.auth import require_user, UserPrincipal
@@ -286,19 +287,6 @@ def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(requi
     confidence = _compute_confidence(chunks, judge.get("grounding_score", 0.6), restricted_removed)
     
     # 8) Shape citations + UX highlights
-    #citations = [
-    #    Citation(**{k: v for k, v in c.items() if k in {"policy_id", "clause_id", "title", "section", "visibility", "allowed_grades"}})
-    #    for c in chunks
-    #]
-    #highlights = [
-    #    {
-    #        "policy_id": c["policy_id"],
-    #        "clause_id": c["clause_id"],
-    #        # small, safe preview (no more than ~180 chars)
-    #        "snippet": (c.get("clause_text", "")[:180] + ("…" if len(c.get("clause_text", "")) > 180 else ""))
-    #    }
-    #    for c in chunks[:5]
-    #]
     citations = []
     for c in chunks:
         citations.append(Citation(
@@ -329,21 +317,7 @@ def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(requi
         correlation_id=corr,
         judge_score=float(judge.get("grounding_score", 0.6)),
         judge_issues=judge.get("issues") or None,
-    )   
-    #    if not chunks:
-    #        return AskResponse(answer="No matching policy content found.", citations=[])
-    #    ctx = "\n\n".join([f"[{c['policy_id']}/{c['clause_id']}] {c['clause_text']}" for c in chunks])
-    #    llm = get_llm()
-    #    msg = [
-    #        {"role":"system","content":"Answer ONLY from provided policy context. Cite clause IDs."},
-    #        {"role":"user","content": f"Q: {req.query}\n\nContext:\n{ctx}"}
-    #    ]
-    #    out = llm.invoke(msg)
-    #    citations = [Citation(**{k:v for k,v in c.items() if k in {"policy_id","clause_id","title","section","visibility","allowed_grades"}}) for c in chunks]
-    #    return AskResponse(answer=getattr(out, 'content', str(out)), citations=citations)
-            
-    # except Exception as e:
-       # raise HTTPException(status_code=500, detail=f"Policy search failed: {type(e).__name__}: {e}")
+    )
 
 @app.post("/rules/suggest", response_model=RuleSuggestResponse)
 def suggest_rule(req: RuleSuggestRequest, user: UserPrincipal = Depends(require_user)):
@@ -429,7 +403,49 @@ def list_rules(user: UserPrincipal = Depends(require_user)):
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest):
-    anomalies = analyze_events(req.events)
+    """
+    Two modes:
+    - If req.events has items: analyze those (your current flow).
+    - Else: pull events from Azure AI Search logs index (aegisai-logs-indx), then analyze.
+    """
+    # 1) If client pasted events, use them directly
+    if req.events:
+        anomalies = analyze_events(req.events)
+        return AnalyzeResponse(anomalies=anomalies)
+
+    # 2) Otherwise, fetch from Azure AI Search (logs index)
+    try:
+        fetched = search_events(
+            query=(req.query or "*"),
+            time_min=req.time_min,
+            time_max=req.time_max,
+            top=(req.top or 50),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}")
+
+    # Map search results -> LogEvent models your rules engine understands
+    events: list[LogEvent] = []
+    for d in fetched:
+        # Your logs index doesn’t carry risk_context; rules should tolerate None
+        events.append(LogEvent(
+            event_id=d.get("event_id"),
+            timestamp=str(d.get("timestamp")),
+            action=d.get("action"),
+            status=d.get("status"),
+            user_role=d.get("user_role"),
+            system=d.get("system"),
+            location=d.get("location"),
+            # legacy/optional fields (engine is lenient)
+            user_dept=None,
+            resource=None,
+            target=None,
+            source_ip=None,
+            auth=None,
+            risk_context=None,
+        ))
+
+    anomalies = analyze_events(events)
     return AnalyzeResponse(anomalies=anomalies)
 
 @app.post("/narrative", response_model=NarrativeResponse)
@@ -474,6 +490,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
