@@ -418,9 +418,9 @@ def analyze(req: AnalyzeRequest):
     - Else: pull events from Azure AI Search logs index (aegisai-logs-indx), then analyze.
     """
     # 1) If client pasted events, use them directly
-    if req.events:
-        anomalies = analyze_events(req.events)
-        return AnalyzeResponse(anomalies=anomalies)
+    #if req.events:
+    #    anomalies = analyze_events(req.events)
+    #    return AnalyzeResponse(anomalies=anomalies)
 
     # 2) Otherwise, fetch from Azure AI Search (logs index)
     try:
@@ -451,7 +451,7 @@ def analyze(req: AnalyzeRequest):
             target=None,
             source_ip=None,
             auth=None,
-            risk_context=None,
+            risk_context=d.get("risk_context") if isinstance(d.get("risk_context"), dict) else None,
         ))
 
     anomalies = analyze_events(events)
@@ -551,6 +551,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
