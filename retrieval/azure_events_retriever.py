@@ -22,6 +22,64 @@ _client = SearchClient(
     credential=AzureKeyCredential(EVENTS_KEY),
 )
 
+def get_events_by_ids(ids: List[str]) -> List[Dict[str, Any]]:
+    if not ids:
+        return []
+
+    out: List[Dict[str, Any]] = []
+
+    # 1) Fast path: try get_document per id (best when ids count is modest)
+    try:
+        for eid in ids:
+            try:
+                d = _evt_client.get_document(key=eid)
+                out.append({
+                    "event_id": d.get("event_id"),
+                    "timestamp": d.get("timestamp"),
+                    "action": d.get("action"),
+                    "status": d.get("status"),
+                    "user_role": d.get("user_role"),
+                    "system": d.get("system"),
+                    "location": d.get("location"),
+                })
+            except Exception:
+                # If a particular ID is missing, just skip it
+                pass
+        if out:
+            return out
+    except Exception:
+        # If the service/SDK version doesn’t support get_document, fall back to filter
+        pass
+
+    # 2) Fallback: OR-filter in small batches
+    def _fetch_batch(batch: List[str]) -> None:
+        parts = [f"event_id eq '{x.replace(\"'\",\"''\")}'" for x in batch]
+        flt = " or ".join(parts)
+        results = _evt_client.search(
+            search_text="*",
+            filter=flt,
+            query_type="simple",
+            top=len(batch),
+            select=["event_id","timestamp","action","status","user_role","system","location"]
+        )
+        for r in results:
+            out.append({
+                "event_id": r.get("event_id"),
+                "timestamp": r.get("timestamp"),
+                "action": r.get("action"),
+                "status": r.get("status"),
+                "user_role": r.get("user_role"),
+                "system": r.get("system"),
+                "location": r.get("location"),
+            })
+
+    BATCH = 50
+    for i in range(0, len(ids), BATCH):
+        _fetch_batch(ids[i:i+BATCH])
+
+    return out
+
+
 def _sel(d, k, default=None):
     """Safe getter for Azure Search result (SearchResult acts like dict/object)."""
     try:
