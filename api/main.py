@@ -461,6 +461,55 @@ def narrative(req: NarrativeRequest):
         items.append(NarrativeItem(event_id=it.event.event_id, narrative=story, remediation=rem, linked_policies=policy_refs))
     return NarrativeResponse(items=items)
 
+
+@app.post("/narrative/from_anomalies", response_model=NarrativeResponse)
+def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
+    # 1) fetch the full events from Search by IDs
+    ids = [it.event_id for it in req.items]
+    try:
+        docs = get_events_by_ids(ids)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fetch events failed: {type(e).__name__}: {e}")
+
+    # index by id for quick lookup
+    by_id = {d["event_id"]: d for d in docs}
+
+    items: list[NarrativeItem] = []
+    for it in req.items:
+        d = by_id.get(it.event_id)
+        if not d:
+            # skip silently; or raise if you prefer strict mode
+            continue
+
+        # Build a LogEvent (your model is lenient with optional fields)
+        ev = LogEvent(
+            event_id=d.get("event_id"),
+            timestamp=str(d.get("timestamp")),
+            action=d.get("action"),
+            status=d.get("status"),
+            user_role=d.get("user_role"),
+            system=d.get("system"),
+            location=d.get("location"),
+        )
+
+        # quick policy linking (reuse your current get_chunks logic)
+        q = " ".join(filter(None, [ev.action, ev.system, ev.user_role]))  # tiny heuristic
+        chunks = get_chunks(q, ev.user_role or "")[:3]
+        policy_refs = [LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"]) for c in chunks]
+
+        story = (
+            f"{ev.user_role or 'User'} in {ev.location or 'N/A'} performed {ev.action} "
+            f"on {ev.system or 'system'}. Signals: {', '.join(it.signals)}. "
+            f"Linked policies: " + ", ".join([f"{p.policy_id}/{p.clause_id}" for p in policy_refs]) if policy_refs else "Linked policies: none."
+        )
+        rem = ["Notify line manager", "Quarantine/reverse if possible", "Schedule targeted policy refresher"]
+
+        items.append(NarrativeItem(
+            event_id=ev.event_id, narrative=story, remediation=rem, linked_policies=policy_refs
+        ))
+
+    return NarrativeResponse(items=items)
+    
 @app.post("/attest", response_model=AttestResponse)
 def attest(req: AttestRequest):
     now = datetime.now(timezone.utc).isoformat()
@@ -490,6 +539,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
