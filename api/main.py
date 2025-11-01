@@ -494,7 +494,10 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
 
         # quick policy linking (reuse your current get_chunks logic)
         q = " ".join(filter(None, [ev.action, ev.system, ev.user_role]))  # tiny heuristic
-        chunks = get_chunks(q, ev.user_role or "")[:3]
+        if USE_VECTOR and callable(get_chunks_vector):
+            chunks = get_chunks_vector(q, ev.user_role or "", top=3, k=20, hybrid=True)
+        else:
+            chunks = get_chunks(q, ev.user_role or "")[:3]
         policy_refs = [LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"]) for c in chunks]
 
         story = (
@@ -539,6 +542,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
