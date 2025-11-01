@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Response, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
 
 from api.models import *
 from api.chains import get_llm
@@ -26,6 +27,14 @@ app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
 USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
 RULES_FILE = os.getenv("RULES_FILE", "data/rules.yaml")
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # Return detailed reasons instead of a generic 422
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": await request.body()},
+    )
+    
 @app.get("/auth/whoami")
 def whoami(user: UserPrincipal = Depends(require_user)):
     return user
@@ -542,6 +551,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
