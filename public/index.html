@@ -228,7 +228,7 @@
 
         <!-- Tile: Answer & Evidence (combined) -->
         <section class="tile span6 collapsed" data-tile="result" id="tile-result">
-          <div class="tile-head" onclick="focusTile('result')">
+          <div class="tile-head" onclick="focusTile('ask')">
             <h3>Answer & Evidence</h3>
             <div class="tile-kpis">
               <span id="kpi-confidence" class="kpi gray">conf —</span>
@@ -321,7 +321,10 @@
       let HAS_RESULT = false;
       const tileAsk    = document.getElementById('tile-ask');
       const tileResult = document.getElementById('tile-result');
-
+      
+      // Start with Answer tile hidden until first success
+      if (tileResult) tileResult.style.display = 'none';
+      
       // ---------- Tile focus logic ----------
       let ACTIVE = 'ask';
       function focusTile(name){
@@ -548,10 +551,6 @@
           renderResult(data);
           el('status').textContent = 'Done';
         }catch(e){
-          // ----- ERROR PATH
-          HAS_RESULT = false;                // hide Answer tile unless a future success happens
-          focusTile(ACTIVE || 'ask');        // re-apply layout; Answer tile will hide if not 'ask'
-          // -------------------------------------------
           el('status').textContent = 'Error';
           //focusTile('result');
           $left().style.display = 'block';
@@ -561,6 +560,10 @@
           el('citations').innerHTML = '';
           el('highlights').innerHTML = '';
           updateResultKPIs({citations:[],highlights:[],confidence:null});
+          // ----- ERROR PATH
+          HAS_RESULT = false;                // hide Answer tile unless a future success happens
+          focusTile(ACTIVE || 'ask');        // re-apply layout; Answer tile will hide if not 'ask'
+          // -------------------------------------------
         }
       }
       document.getElementById('askBtn').addEventListener('click', doAsk);
@@ -737,4 +740,5 @@
     </script>
   </body>
 </html>
+
 
