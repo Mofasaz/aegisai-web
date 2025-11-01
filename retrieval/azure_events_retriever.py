@@ -56,7 +56,7 @@ def get_events_by_ids(ids: List[str]) -> List[Dict[str, Any]]:
         if not batch:
             return []
         # Escape single quotes for OData literal strings
-        parts = [f"event_id eq '{x.replace(\"'\",\"''\")}'" for x in batch]
+        parts = ["event_id eq '{}'".format(x.replace("'", "''")) for x in batch]
         flt = " or ".join(parts)
     
         results = _evt_client.search(
