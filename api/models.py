@@ -93,6 +93,14 @@ class LinkedPolicy(BaseModel):
     policy_id: str
     clause_id: str
 
+class NarrativeFromAnomaliesItem(BaseModel):
+    event_id: str
+    signals: List[str]
+    risk_score: int
+
+class NarrativeFromAnomaliesRequest(BaseModel):
+    items: List[NarrativeFromAnomaliesItem]
+    
 class NarrativeItem(BaseModel):
     event_id: str
     narrative: str
@@ -149,6 +157,7 @@ class RuleApplyRequest(BaseModel):
 class RuleApplyResponse(BaseModel):
     status: str
     message: Optional[str] = None
+
 
 
 
