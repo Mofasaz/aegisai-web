@@ -6,176 +6,162 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       :root{
-        --bg: #0b1020;
-        --panel: #121a2f;
-        --muted: #8ea1b5;
-        --text: #e9eef6;
-        --accent: #4ea1ff;
-        --ok: #16a34a;
-        --warn: #f59e0b;
-        --bad: #ef4444;
-        --chip: #1b2540;
-        --chip-brd:#2a3556;
-        --ring:#2b3b67;
+        --bg:#0b1020; --panel:#121a2f; --muted:#8ea1b5; --text:#e9eef6; --accent:#4ea1ff;
+        --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444; --chip:#1b2540; --chip-brd:#2a3556; --ring:#2b3b67;
+        --mh-from:#E8B84E; --mh-to:#D7951A; --mh-border:#A87008; --mh-glow:rgba(232,184,78,.35);
       }
-      *{ box-sizing: border-box }
-      html,body{ height:100% }
+      *{box-sizing:border-box}
+      html,body{height:100%}
       body{
-        margin:0; padding:0;
+        margin:0; padding:0; color:var(--text);
         background: radial-gradient(1200px 800px at 20% -10%, #1a2650 0%, #0b1020 55%);
-        color:var(--text);
-        font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       }
-      .wrap{ max-width: 1200px; margin: 40px auto; padding: 0 16px; }
-      header{ display:flex; align-items:center; gap:14px; margin-bottom:18px; }
-      header h1{ font-size:20px; margin:0; letter-spacing:.3px }
-      header .brand{
-        width:36px; height:36px; display:grid; place-items:center;
-        border-radius:10px; background:linear-gradient(135deg,#4ea1ff, #7c7cff);
-        color:white; font-weight:700;
-        box-shadow: 0 10px 30px rgba(78,161,255,.35);
+      .wrap{max-width:1200px;margin:40px auto;padding:0 16px;}
+      header{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+      header h1{font-size:20px;margin:0;letter-spacing:.3px}
+      .brand{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;
+        background:linear-gradient(135deg,#4ea1ff,#7c7cff);color:#fff;font-weight:700;
+        box-shadow:0 10px 30px rgba(78,161,255,.35);
       }
-      .grid{
-        display:grid; gap:16px;
-        grid-template-columns: 1.1fr .9fr;
-      }
-      @media (max-width: 980px){ .grid{ grid-template-columns: 1fr } }
 
-      .panel{
+      /* ---------- Tiles layout ---------- */
+      .tiles{
+        display:grid; gap:16px;
+        grid-template-columns: repeat(6, 1fr);
+        grid-auto-rows: 1fr;
+      }
+      /* Default tile spans (desktop) */
+      .tile{ grid-column: span 3; }
+      .tile.span2{ grid-column: span 2; }
+      .tile.span4{ grid-column: span 4; }
+      .tile.span6{ grid-column: span 6; }
+
+      @media (max-width: 980px){
+        .tiles{ grid-template-columns: 1fr; }
+        .tile, .tile.span2, .tile.span4, .tile.span6{ grid-column: span 1; }
+      }
+
+      /* Tile frame */
+      .tile{
+        position:relative;
         background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
         border:1px solid var(--chip-brd);
-        border-radius:16px; padding:16px;
+        border-radius:16px; padding:0; overflow:hidden;
         backdrop-filter: blur(6px);
-        box-shadow: 0 6px 24px rgba(0,0,0,.25);
+        box-shadow:0 6px 24px rgba(0,0,0,.25);
+        transition: transform .25s ease, box-shadow .25s ease, opacity .2s ease;
+        cursor: default;
       }
-      .panel h3{ margin:.2rem 0 .6rem 0; font-size:15px }
+      .tile:hover{ box-shadow:0 10px 30px rgba(0,0,0,.35); }
+      .tile.active{ transform: scale(1.01); box-shadow:0 18px 38px rgba(0,0,0,.45); }
+
+      /* Tile header */
+      .tile-head{
+        display:flex; align-items:center; gap:10px; padding:12px 14px;
+        border-bottom:1px solid var(--chip-brd); user-select:none; cursor:pointer;
+      }
+      .tile-head h3{ margin:0; font-size:15px; }
+      .tile-kpis{ margin-left:auto; display:flex; gap:8px; align-items:center; }
+
+      /* Tile body animates height/opacity when collapsed */
+      .tile-body{
+        padding:12px 14px;
+        transition: grid-template-rows .25s ease, opacity .2s ease, max-height .25s ease;
+      }
+      .tile.collapsed .tile-body{
+        max-height:60px; opacity:.75; overflow:hidden; pointer-events:none;
+      }
+
+      /* Reusable UI bits */
       .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
       input, textarea, button{
         border-radius:12px; border:1px solid var(--ring); color:var(--text);
-        background: #0e152a; outline:none;
+        background:#0e152a; outline:none;
       }
       input, textarea{ width:100%; padding:10px 12px; }
-      textarea{ resize: vertical; min-height:84px }
+      textarea{ resize:vertical; min-height:84px }
       button{
-        background: linear-gradient(135deg, #4ea1ff, #7c7cff);
+        background: linear-gradient(135deg,#4ea1ff,#7c7cff);
         border:none; padding:10px 16px; font-weight:600; cursor:pointer; color:white;
-        box-shadow: 0 10px 24px rgba(78,161,255,.25);
+        box-shadow:0 10px 24px rgba(78,161,255,.25);
       }
       button:hover{ filter:brightness(1.05) }
       .small{ color:var(--muted) }
-
       .card{
-        background: #0f1730;
-        border:1px solid var(--chip-brd);
+        background:#0f1730; border:1px solid var(--chip-brd);
         border-radius:14px; padding:12px; margin-top:10px;
       }
       .badges{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-
       .chip{
         display:inline-flex; align-items:center; gap:6px;
-        background: var(--chip);
-        border:1px solid var(--chip-brd);
-        color: var(--text);
-        font-size:12px; padding:4px 8px; border-radius:999px;
+        background:var(--chip); border:1px solid var(--chip-brd);
+        color:var(--text); font-size:12px; padding:4px 8px; border-radius:999px;
       }
-      .chip.ok{    background: rgba(22,163,74,.15);  border-color: rgba(22,163,74,.35);  color:#a6f4c5 }
-      .chip.warn{  background: rgba(245,158,11,.15); border-color: rgba(245,158,11,.35); color:#fde68a }
-      .chip.bad{   background: rgba(239,68,68,.15);  border-color: rgba(239,68,68,.35);  color:#fecaca }
-      .chip.gray{  color:#c7d2fe }
+      .chip.ok{   background:rgba(22,163,74,.15);  border-color:rgba(22,163,74,.35);  color:#a6f4c5 }
+      .chip.warn{ background:rgba(245,158,11,.15); border-color:rgba(245,158,11,.35); color:#fde68a }
+      .chip.bad{  background:rgba(239,68,68,.15);  border-color:rgba(239,68,68,.35);  color:#fecaca }
+      .chip.gray{ color:#c7d2fe }
 
+      .btn-marhaba{
+        display:inline-flex; align-items:center; gap:6px;
+        padding:8px 12px; border-radius:999px;
+        background: linear-gradient(135deg,var(--mh-from),var(--mh-to));
+        border:1px solid var(--mh-border); color:#1a1205; font-weight:700;
+        box-shadow:0 10px 24px var(--mh-glow), inset 0 0 0 1px rgba(255,255,255,.25);
+        cursor:pointer; transition: transform .05s ease, filter .15s ease, box-shadow .2s ease;
+      }
+      .btn-marhaba:hover{ filter:brightness(1.05); box-shadow:0 12px 28px var(--mh-glow), inset 0 0 0 1px rgba(255,255,255,.35); }
+      .btn-marhaba:active{ transform: translateY(1px); }
+      .btn-marhaba .dot{ width:8px;height:8px;border-radius:50%; background:#7A0F1B; box-shadow:0 0 0 2px rgba(122,15,27,.12); }
+
+      /* Answer bullets */
       #answer ul{ margin:.4rem 0 0 1.2rem }
       #answer li{ margin:.25rem 0; line-height:1.35 }
       #answer li strong{ font-weight:700 }
 
       ul.clean{ list-style:none; margin:0; padding:0 }
       ul.clean li{ padding:.55rem .65rem; border-radius:10px; margin:.3rem 0;
-        background: rgba(255,255,255,.02); border:1px solid var(--chip-brd);
+        background:rgba(255,255,255,.02); border:1px solid var(--chip-brd);
       }
-      code{
-        background: rgba(255,255,255,.06); padding:2px 6px; border-radius:6px;
-        border:1px solid var(--chip-brd); color:#c7d2fe; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      code{ background:rgba(255,255,255,.06); padding:2px 6px; border-radius:6px;
+        border:1px solid var(--chip-brd); color:#c7d2fe; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
       }
       details{ margin-top:10px }
       pre{ white-space:pre-wrap; word-break:break-word; background:#0b1226; padding:12px; border-radius:12px; border:1px solid var(--chip-brd) }
-      .sectionTitle{ display:flex; align-items:center; justify-content:space-between; gap:10px }
+
       /* Judge extras */
       .issue-badge{
-        display:inline-flex; align-items:center;
-        background: rgba(255,255,255,.05);
-        border:1px solid var(--chip-brd);
-        color:#fca5a5;
-        font-size:12px; padding:3px 8px; border-radius:8px;
-      }
-
-      /* spacing tweaks for the meta badges row */
-      .badges { gap: 10px; row-gap: 8px; }
-      
-      /* issue badges with subtle hover + tooltip */
-      .issue-badge{
-        position:relative;
-        display:inline-flex; align-items:center;
-        background: rgba(255,255,255,.05);
-        border:1px solid var(--chip-brd);
-        color:#fca5a5;
-        font-size:12px; padding:3px 8px; border-radius:8px;
+        position:relative; display:inline-flex; align-items:center;
+        background:rgba(255,255,255,.05); border:1px solid var(--chip-brd);
+        color:#fca5a5; font-size:12px; padding:3px 8px; border-radius:8px;
         transition: transform .12s ease, background .12s ease;
       }
       .issue-badge:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); }
-      
-      /* Tooltip: uses data-tip attr */
       .issue-badge[data-tip]::after{
-        content: attr(data-tip);
-        position:absolute; left:0; top: calc(100% + 6px);
-        background:#0b1226; color:#e9eef6;
-        border:1px solid var(--chip-brd);
-        padding:6px 8px; border-radius:8px;
-        font-size:12px; line-height:1.25; white-space:nowrap;
-        opacity:0; transform: translateY(-4px);
-        pointer-events:none; transition: opacity .12s ease, transform .12s ease;
-        z-index: 30;
-        box-shadow: 0 8px 20px rgba(0,0,0,.35);
+        content:attr(data-tip); position:absolute; left:0; top:calc(100% + 6px);
+        background:#0b1226; color:#e9eef6; border:1px solid var(--chip-brd);
+        padding:6px 8px; border-radius:8px; font-size:12px; line-height:1.25; white-space:nowrap;
+        opacity:0; transform: translateY(-4px); pointer-events:none; transition: opacity .12s ease, transform .12s ease; z-index:30;
+        box-shadow:0 8px 20px rgba(0,0,0,.35);
       }
-      .issue-badge[data-tip]:hover::after{ opacity:1; transform: translateY(0); }
-      
-      /* Optional: tooltip arrow */
+      .issue-badge[data-tip]:hover::after{ opacity:1; transform:translateY(0); }
       .issue-badge[data-tip]::before{
-        content:"";
-        position:absolute; left:12px; top: calc(100% + 2px);
-        width:8px; height:8px; background:#0b1226;
-        border-left:1px solid var(--chip-brd); border-top:1px solid var(--chip-brd);
-        transform: rotate(45deg); z-index: 31;
-        opacity:0; transition: opacity .12s ease;
+        content:""; position:absolute; left:12px; top:calc(100% + 2px);
+        width:8px; height:8px; background:#0b1226; border-left:1px solid var(--chip-brd); border-top:1px solid var(--chip-brd);
+        transform:rotate(45deg); z-index:31; opacity:0; transition:opacity .12s ease;
       }
       .issue-badge[data-tip]:hover::before{ opacity:1; }
-      .sectionTitle .chip { padding: 4px 10px; border-radius: 999px; }
-      /* Marhaba-styled action button */
-      .btn-marhaba{
-        --mh-from:#E8B84E;   /* warm gold */
-        --mh-to:#D7951A;     /* amber/orange */
-        --mh-border:#A87008; /* rich outline */
-        --mh-glow: rgba(232,184,78,.35);
-      
-        display:inline-flex; align-items:center; gap:6px;
-        padding:8px 12px; border-radius:999px;
-        background: linear-gradient(135deg, var(--mh-from), var(--mh-to));
-        border:1px solid var(--mh-border);
-        color:#1a1205; font-weight:700;
-        box-shadow: 0 10px 24px var(--mh-glow), inset 0 0 0 1px rgba(255,255,255,.25);
-        cursor:pointer; transition: transform .05s ease, filter .15s ease, box-shadow .2s ease;
-      }
-      .btn-marhaba:hover{
-        filter: brightness(1.05);
-        box-shadow: 0 12px 28px var(--mh-glow), inset 0 0 0 1px rgba(255,255,255,.35);
-      }
-      .btn-marhaba:active{
-        transform: translateY(1px);
-      }
-      .btn-marhaba .dot{
-        width:8px; height:8px; border-radius:50%;
-        background:#7A0F1B; /* deep maroon accent */
-        box-shadow: 0 0 0 2px rgba(122,15,27,.12);
-      }
 
+      /* Mini KPI badges inside tile headers */
+      .kpi{ font-variation-settings:"wght" 650; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--chip-brd); background:#0f1730; }
+      .kpi.ok{ color:#a6f4c5; border-color:rgba(22,163,74,.35); }
+      .kpi.warn{ color:#fde68a; border-color:rgba(245,158,11,.35); }
+      .kpi.bad{ color:#fecaca; border-color:rgba(239,68,68,.35); }
+      .kpi.gray{ color:#c7d2fe; }
+
+      /* Utility */
+      .hidden{ display:none !important; }
     </style>
   </head>
   <body>
@@ -185,121 +171,145 @@
         <h1>AegisAI — Policy Copilot</h1>
       </header>
 
-      <!-- Input panel -->
-      <div class="panel">
-        <div class="row">
-          <input id="grade" placeholder="Grade (e.g., Cabin Crew / Pilot / HR Manager)" />
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <textarea id="q" rows="3" placeholder="Ask a policy question..."></textarea>
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <button id="askBtn">Ask</button>
-          <span id="status" class="small"></span>
-        </div>
-      </div>
+      <div class="tiles" id="tiles">
+        <!-- Tile: Ask -->
+        <section class="tile span3 active" data-tile="ask" id="tile-ask">
+          <div class="tile-head" onclick="focusTile('ask')">
+            <h3>Ask</h3>
+            <div class="tile-kpis">
+              <span id="kpi-lastQuery" class="kpi gray">—</span>
+            </div>
+          </div>
+          <div class="tile-body">
+            <div class="row">
+              <input id="grade" placeholder="Grade (e.g., Cabin Crew / Pilot / HR Manager)" />
+            </div>
+            <div class="row" style="margin-top:8px;">
+              <textarea id="q" rows="3" placeholder="Ask a policy question..."></textarea>
+            </div>
+            <div class="row" style="margin-top:8px;">
+              <button id="askBtn">Ask</button>
+              <span id="status" class="small"></span>
+            </div>
+          </div>
+        </section>
 
-      <!-- Propose Rule panel -->
-      <div class="panel" style="margin-top:16px;">
-        <div class="sectionTitle">
-          <h3>Propose Rule</h3> 
-          <button id="btnReload" class="btn-marhaba" style="margin-left:auto;">
-            <span class="dot"></span> Reload Rules
-          </button>
-        </div>
-        <div class="small" style="margin-top:6px;">Turn natural language into a YAML rule, then approve.</div>
-        <div class="row" style="margin-top:8px;">
-          <textarea id="rulePrompt" rows="3" placeholder="Describe the rule you want (e.g., 'Flag off-hour access to Crew Scheduling Portal by Cabin Crew with >10 shift hours and >2 failed logins in last 30 days')"></textarea>
-        </div>
-        <div class="row" style="gap:8px;margin-top:8px;">
-          <input id="ruleCategory" placeholder="Category (optional, e.g., access/auth/download)" style="flex:1;" />
-          <input id="ruleSeverity" placeholder="Severity (optional, e.g., high)" style="flex:1;" />
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <button id="btnSuggest">Suggest YAML</button>
-          <button id="btnApply" disabled>Approve & Save</button>
-          <span id="ruleStatus" class="small"></span>
-        </div>
-        <div class="card" style="margin-top:10px;">
-          <div class="small" style="opacity:.85; margin-bottom:6px;">Suggested YAML</div>
-          <pre id="rulePreview" style="min-height:96px;"></pre>
-        </div>
-      </div>
+        <!-- Tile: Propose Rule -->
+        <section class="tile span3 collapsed" data-tile="rules" id="tile-rules">
+          <div class="tile-head" onclick="focusTile('rules')">
+            <h3>Propose Rule</h3>
+            <div class="tile-kpis">
+              <span id="kpi-rule" class="kpi gray">idle</span>
+              <button id="btnReload" class="btn-marhaba" title="Reload Rules">
+                <span class="dot"></span> Reload
+              </button>
+            </div>
+          </div>
+          <div class="tile-body">
+            <div class="small" style="margin-bottom:6px;">Turn natural language into a YAML rule, then approve.</div>
+            <div class="row">
+              <textarea id="rulePrompt" rows="3" placeholder="Describe the rule (e.g., 'Flag off-hour access to Crew Scheduling Portal by Cabin Crew with >10 shift hours and >2 failed logins in 30 days')"></textarea>
+            </div>
+            <div class="row" style="gap:8px;margin-top:8px;">
+              <input id="ruleCategory" placeholder="Category (optional, e.g., access/auth/download)" style="flex:1;" />
+              <input id="ruleSeverity" placeholder="Severity (optional, e.g., high)" style="flex:1;" />
+            </div>
+            <div class="row" style="margin-top:8px;">
+              <button id="btnSuggest">Suggest YAML</button>
+              <button id="btnApply" disabled>Approve & Save</button>
+              <span id="ruleStatus" class="small"></span>
+            </div>
+            <div class="card" style="margin-top:10px;">
+              <div class="small" style="opacity:.85; margin-bottom:6px;">Suggested YAML</div>
+              <pre id="rulePreview" style="min-height:96px;"></pre>
+            </div>
+          </div>
+        </section>
 
-      <!-- Results grid -->
-      <div class="grid" style="margin-top:16px;">
-        <!-- LEFT: Answer & Meta -->
-        <div class="panel" id="leftCol" style="display:none;">
-          <div class="sectionTitle">
-            <h3>Answer</h3>
-            <div class="badges" id="metaBadges"></div>
+        <!-- Tile: Answer & Evidence (combined) -->
+        <section class="tile span6 collapsed" data-tile="result" id="tile-result">
+          <div class="tile-head" onclick="focusTile('result')">
+            <h3>Answer & Evidence</h3>
+            <div class="tile-kpis">
+              <span id="kpi-confidence" class="kpi gray">conf —</span>
+              <span id="kpi-cites" class="kpi gray">cites 0</span>
+              <span id="kpi-high" class="kpi gray">hi 0</span>
+            </div>
           </div>
-          <div id="answer" class="card"></div>
-
-          <details>
-            <summary>Raw JSON</summary>
-            <pre id="raw"></pre>
-          </details>
-        </div>
-
-        <!-- RIGHT: Citations + Highlights -->
-        <div class="panel" id="rightCol" style="display:none;">
-          <div>
-            <h3 style="margin-bottom:.4rem">Citations</h3>
-            <ul id="citations" class="clean"></ul>
-          </div>
-          <div style="margin-top:14px;">
-            <h3 style="margin-bottom:.4rem">Highlights</h3>
-            <ul id="highlights" class="clean"></ul>
-          </div>
-        </div>
-        <!-- Detect & Narrate -->
-        <div class="panel" style="margin-top:16px;">
-          <div class="sectionTitle">
-            <h3>Detect &amp; Narrate</h3>
-            <span class="small">Query logs → detect anomalies → generate narratives</span>
-          </div>
-        
-          <!-- Query row -->
-          <div class="row" style="margin-top:8px;">
-            <input id="an_q" placeholder="Query (e.g., login failed OR access_denied). Leave empty for all." />
-            <input id="an_from" type="datetime-local" />
-            <input id="an_to" type="datetime-local" />
-            <input id="an_top" type="number" min="1" max="500" value="50" style="max-width:110px" />
-            <button id="btnAnalyze">Analyze</button>
-          </div>
-          <div id="an_status" class="small" style="margin-top:6px;"></div>
-        
-          <!-- Anomalies table -->
-          <div id="an_results" class="card" style="margin-top:10px; display:none;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <h4 style="margin:.2rem 0;">Anomalies</h4>
-              <div class="row">
-                <button id="btnNarrate" disabled>Narrate selected</button>
+          <div class="tile-body">
+            <div class="row" style="gap:16px; align-items:stretch; flex-wrap:wrap;">
+              <!-- Answer & meta -->
+              <div class="panel" style="flex:1 1 420px; min-width:320px;">
+                <div class="row" style="justify-content:space-between; align-items:center;">
+                  <h3 style="margin:.2rem 0 .6rem 0; font-size:15px">Answer</h3>
+                  <div class="badges" id="metaBadges"></div>
+                </div>
+                <div id="answer" class="card"></div>
+                <details>
+                  <summary>Raw JSON</summary>
+                  <pre id="raw"></pre>
+                </details>
+              </div>
+              <!-- Citations + Highlights -->
+              <div class="panel" style="flex:1 1 420px; min-width:320px;">
+                <div>
+                  <h3 style="margin-bottom:.4rem">Citations</h3>
+                  <ul id="citations" class="clean"></ul>
+                </div>
+                <div style="margin-top:14px;">
+                  <h3 style="margin-bottom:.4rem">Highlights</h3>
+                  <ul id="highlights" class="clean"></ul>
+                </div>
               </div>
             </div>
-            <div class="small" style="color:var(--muted); margin-bottom:6px;">Select rows and click “Narrate selected”.</div>
-            <table id="an_table" style="width:100%; border-collapse:collapse;">
-              <thead>
-                <tr style="text-align:left;">
-                  <th></th>
-                  <th>Event</th>
-                  <th>Signals</th>
-                  <th>Risk</th>
-                  <th>Explain</th>
-                </tr>
-              </thead>
-              <tbody id="an_body"></tbody>
-            </table>
           </div>
-        
-          <!-- Narratives -->
-          <div id="an_narr" class="card" style="margin-top:10px; display:none;">
-            <h4 style="margin:.2rem 0;">Narratives</h4>
-            <ul id="an_narr_list" class="clean"></ul>
-          </div>
-        </div>
+        </section>
 
+        <!-- Tile: Detect & Narrate -->
+        <section class="tile span6 collapsed" data-tile="detect" id="tile-detect">
+          <div class="tile-head" onclick="focusTile('detect')">
+            <h3>Detect &amp; Narrate</h3>
+            <div class="tile-kpis">
+              <span id="kpi-anom" class="kpi gray">anom 0</span>
+            </div>
+          </div>
+          <div class="tile-body">
+            <!-- Query row -->
+            <div class="row">
+              <input id="an_q" placeholder="Query (e.g., login failed OR access_denied). Leave empty for all." />
+              <input id="an_from" type="datetime-local" />
+              <input id="an_to" type="datetime-local" />
+              <input id="an_top" type="number" min="1" max="500" value="50" style="max-width:110px" />
+              <button id="btnAnalyze">Analyze</button>
+            </div>
+            <div id="an_status" class="small" style="margin-top:6px;"></div>
+
+            <!-- Anomalies table -->
+            <div id="an_results" class="card" style="margin-top:10px; display:none;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h4 style="margin:.2rem 0;">Anomalies</h4>
+                <div class="row">
+                  <button id="btnNarrate" disabled>Narrate selected</button>
+                </div>
+              </div>
+              <div class="small" style="color:var(--muted); margin-bottom:6px;">Select rows and click “Narrate selected”.</div>
+              <table id="an_table" style="width:100%; border-collapse:collapse;">
+                <thead>
+                  <tr style="text-align:left;">
+                    <th></th><th>Event</th><th>Signals</th><th>Risk</th><th>Explain</th>
+                  </tr>
+                </thead>
+                <tbody id="an_body"></tbody>
+              </table>
+            </div>
+
+            <!-- Narratives -->
+            <div id="an_narr" class="card" style="margin-top:10px; display:none;">
+              <h4 style="margin:.2rem 0;">Narratives</h4>
+              <ul id="an_narr_list" class="clean"></ul>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -307,27 +317,30 @@
       // If your API is same-origin, leave empty
       const API = '';
 
+      // ---------- Tile focus logic ----------
+      let ACTIVE = 'ask';
+      function focusTile(name){
+        ACTIVE = name;
+        for(const t of document.querySelectorAll('.tile')){
+          const key = t.getAttribute('data-tile');
+          if(key === name){
+            t.classList.add('active');
+            t.classList.remove('collapsed');
+          }else{
+            t.classList.remove('active');
+            t.classList.add('collapsed');
+          }
+        }
+      }
+
       const el = (id) => document.getElementById(id);
-      const $left  = () => el('leftCol');
-      const $right = () => el('rightCol');
+      const $left  = () => el('tile-result'); // keep compatibility for show/hide
+      const $right = () => el('tile-result');
 
       function safeArray(x){ return Array.isArray(x) ? x : [] }
       function text(t){ return (t===null || t===undefined) ? '' : String(t) }
+      function sanitize(s){ return String(s||'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
-      async function doReloadRules(){
-        const status = document.getElementById('ruleStatus');
-        status.textContent = 'Reloading…';
-        try{
-          const res = await fetch(`${API}/rules/reload`, { method:'POST' });
-          const data = await res.json();
-          if(!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-          status.textContent = `Reloaded: ${data.count} active rule(s)`;
-        }catch(e){
-          status.textContent = `Reload failed: ${String(e)}`;
-        }
-      }
-      document.getElementById('btnReload')?.addEventListener('click', doReloadRules);
-      
       // ---------- Colored badges ----------
       function confidenceBadge(conf){
         if (typeof conf !== 'number') return '';
@@ -337,37 +350,6 @@
         else if (conf < 0.50) cls = 'bad';
         return `<span class="chip ${cls}" title="Blended retrieval + judge signal">Confidence: ${pct}%</span>`;
       }
-
-      function visibilityBadge(vis){
-        const v = (vis||'').toLowerCase();
-        if (v === 'restricted') return `<span class="chip bad">Restricted</span>`;
-        if (v === 'internal')   return `<span class="chip warn">Internal</span>`;
-        if (v === 'public')     return `<span class="chip ok">Public</span>`;
-        return `<span class="chip gray">${vis||'—'}</span>`;
-      }
-
-      function correlationBadge(id){
-        if (!id) return '';
-        return `<span class="chip gray">Corr: ${id.slice(0,8)}</span>`;
-      }
-
-      function reasonsBadge(reasons){
-        const arr = safeArray(reasons);
-        if (!arr.length) return '';
-        return `<span class="chip warn">Reasons: ${arr.join('; ')}</span>`;
-      }
-
-      /* Optional: friendly explanations for common judge / risk notes */
-      const ISSUE_TIPS = {
-        judge_error: "Judge fallback used. Confidence blended with retrieval heuristics.",
-        hallucination: "Answer contains facts that weren't in the provided snippets.",
-        weak_grounding: "Answer loosely supported by snippets; consider rephrasing or narrowing the query.",
-        restricted_probe: "Your query matched restricted clauses you’re not allowed to view.",
-        mismatch_scope: "Question scope doesn't match policy scope (e.g., HR vs IT).",
-        vague_query: "Query is too broad; add system, role, or action to improve grounding."
-      };
-
-      /* Build a colored “Judge: XX%” chip (unchanged) */
       function judgeScoreBadge(score){
         if (typeof score !== 'number') return '';
         const pct = Math.round(score*100);
@@ -376,43 +358,58 @@
         else if (score < 0.50) cls = 'bad';
         return `<span class="chip ${cls}" title="Groundedness from LLM judge">${pct}% Judge</span>`;
       }
-
-      /* Issue badges with tooltips via data-tip */
+      function visibilityBadge(vis){
+        const v = (vis||'').toLowerCase();
+        if (v === 'restricted') return `<span class="chip bad">Restricted</span>`;
+        if (v === 'internal')   return `<span class="chip warn">Internal</span>`;
+        if (v === 'public')     return `<span class="chip ok">Public</span>`;
+        return `<span class="chip gray">${vis||'—'}</span>`;
+      }
+      function correlationBadge(id){
+        if (!id) return '';
+        return `<span class="chip gray">Corr: ${id.slice(0,8)}</span>`;
+      }
+      const ISSUE_TIPS = {
+        judge_error:"Judge fallback used. Confidence blended with retrieval heuristics.",
+        hallucination:"Answer contains facts that weren't in the provided snippets.",
+        weak_grounding:"Answer loosely supported by snippets; consider narrowing the query.",
+        restricted_probe:"Your query matched restricted clauses you’re not allowed to view.",
+        mismatch_scope:"Question scope doesn't match policy scope (e.g., HR vs IT).",
+        vague_query:"Query too broad; add system, role, or action."
+      };
       function judgeIssuesBadges(issues){
         const arr = Array.isArray(issues) ? issues : [];
         if (!arr.length) return '';
-        return arr.map(code => {
+        return arr.map(code=>{
           const t = String(code);
           const tip = ISSUE_TIPS[t] || "Signal flagged by judge.";
           return `<span class="issue-badge" role="note" aria-label="${sanitize(t)}" data-tip="${sanitize(tip)}">${sanitize(t)}</span>`;
         }).join(' ');
       }
+      function reasonsBadge(reasons){
+        const arr = safeArray(reasons);
+        if (!arr.length) return '';
+        return `<span class="chip warn">Reasons: ${arr.join('; ')}</span>`;
+      }
 
-      // ---------- Bullet rendering with bold clause ids ----------
+      // ---------- Answer bullets ----------
       function bulletsHTML(ans) {
         const lines = ans.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        if (!lines.length) return '';
-
         const bulletLines = looksLikeList(lines) ? lines : splitIntoSentences(ans);
-
         const lis = bulletLines
           .map(s => sanitize(s.replace(/^[-*•\d.)]+\s*/, '')))
           .filter(Boolean)
           .map(s => `<li>${formatClauseBold(s)}</li>`)
           .join('');
-
         return `<ul>${lis}</ul>`;
       }
       function looksLikeList(lines) {
         const hits = lines.filter(l => /^(\*|-|•|\d+[.)])\s+/.test(l)).length;
         return hits >= 2;
       }
-      function splitIntoSentences(text) {
-        const parts = text
-          .replace(/\n+/g, ' ')
-          .split(/(?<=[.?!\]])\s+(?=[A-Z[(])/)
-          .map(s => s.trim()).filter(Boolean);
-        if (parts.length < 3) return text.split(/,\s+/).map(s => s.trim()).filter(Boolean);
+      function splitIntoSentences(txt) {
+        const parts = txt.replace(/\n+/g, ' ').split(/(?<=[.?!\]])\s+(?=[A-Z[(])/).map(s=>s.trim()).filter(Boolean);
+        if (parts.length < 3) return txt.split(/,\s+/).map(s=>s.trim()).filter(Boolean);
         return parts;
       }
       function formatClauseBold(safeText) {
@@ -420,19 +417,16 @@
         if (!m) return safeText;
         return safeText.replace(m[0], `<strong>${m[0]}</strong>`);
       }
-      function sanitize(s){
-        return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-      }
 
       // ---------- Rendering ----------
       function renderBadges(data){
         const bits = [];
         bits.push(confidenceBadge(data.confidence));
-        bits.push(judgeScoreBadge(data.judge_score)); // NEW
+        bits.push(judgeScoreBadge(data.judge_score));
         if (data.restricted_probe) bits.push(`<span class="chip bad" title="Query matched restricted clauses">Restricted Probe</span>`);
         if (Array.isArray(data.risk_reasons) && data.risk_reasons.length) bits.push(reasonsBadge(data.risk_reasons));
         bits.push(correlationBadge(data.correlation_id));
-        const issues = judgeIssuesBadges(data.judge_issues); // NEW
+        const issues = judgeIssuesBadges(data.judge_issues);
         if (issues) bits.push(issues);
         return bits.filter(Boolean).join(' ');
       }
@@ -440,10 +434,7 @@
       function renderCitations(cites){
         const ul = el('citations');
         ul.innerHTML = '';
-        if (!cites.length){
-          ul.innerHTML = `<li class="small">None</li>`;
-          return;
-        }
+        if (!cites.length){ ul.innerHTML = `<li class="small">None</li>`; return; }
         cites.forEach(c=>{
           const grades = Array.isArray(c.allowed_grades) ? ` <span class="chip gray">grades: ${c.allowed_grades.join(', ')}</span>` : '';
           const vis = visibilityBadge(c.visibility);
@@ -458,10 +449,7 @@
       function renderHighlights(items, citesByKey){
         const ul = el('highlights');
         ul.innerHTML = '';
-        if (!items.length){
-          ul.innerHTML = `<li class="small">None</li>`;
-          return;
-        }
+        if (!items.length){ ul.innerHTML = `<li class="small">None</li>`; return; }
         items.forEach(h=>{
           const key = `${h.policy_id}/${h.clause_id}`;
           const meta = citesByKey.get(key) || {};
@@ -475,16 +463,35 @@
                 <div class="small" style="margin-top:4px">${snip}</div>
               </div>
               <div>${vis}</div>
-            </div>
-          `;
+            </div>`;
           ul.appendChild(li);
         });
       }
 
+      // Update KPIs in headers
+      function updateResultKPIs(data){
+        const conf = (typeof data.confidence === 'number') ? Math.round(data.confidence*100) : null;
+        el('kpi-confidence').textContent = conf===null ? 'conf —' : `conf ${conf}%`;
+        const cites = safeArray(data.citations || data.Citations);
+        const highs = safeArray(data.highlights || data.Highlights);
+        el('kpi-cites').textContent = `cites ${cites.length}`;
+        el('kpi-high').textContent = `hi ${highs.length}`;
+      }
+      function updateAskKPI(query){
+        el('kpi-lastQuery').textContent = (query && query.length>24) ? `${query.slice(0,24)}…` : (query||'—');
+      }
+      function updateRuleKPI(text){
+        const node = el('kpi-rule');
+        node.textContent = text || 'idle';
+        node.className = 'kpi ' + (text?.startsWith('Saved') ? 'ok' : (text?.startsWith('Suggested') ? 'warn' : 'gray'));
+      }
+      function updateDetectKPI(n){
+        el('kpi-anom').textContent = `anom ${n||0}`;
+      }
+
       function renderResult(data){
-        // show columns
-        $left().style.display = 'block';
-        $right().style.display = 'block';
+        // Ensure result tile is visible
+        focusTile('result');
 
         // raw json
         el('raw').textContent = JSON.stringify(data, null, 2);
@@ -502,126 +509,119 @@
         const citesByKey = new Map(citations.map(c=>[`${c.policy_id}/${c.clause_id}`, c]));
         const highlights = safeArray(data.highlights || data.Highlights);
         renderHighlights(highlights, citesByKey);
+
+        // header KPIs
+        updateResultKPIs(data);
       }
 
       // ---------- API ----------
       async function doAsk(){
+        const q = el('q').value.trim();
+        updateAskKPI(q);
         el('status').textContent = 'Asking…';
-        $left().style.display = 'none';
-        $right().style.display = 'none';
-
-        const payload = {
-          query: el('q').value.trim(),
-          user_grade: el('grade').value.trim() || null
-        };
 
         try{
           const res = await fetch(`${API}/ask`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify(payload)
+            method:'POST', headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ query: q, user_grade: el('grade').value.trim() || null })
           });
-          if(!res.ok){
-            const err = await res.json().catch(()=> ({}));
-            throw new Error(err.detail || `${res.status} ${res.statusText}`);
-          }
           const data = await res.json();
+          if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
           renderResult(data);
           el('status').textContent = 'Done';
         }catch(e){
           el('status').textContent = 'Error';
-          $left().style.display = 'block';
-          $right().style.display = 'none';
+          focusTile('result');
           el('answer').innerHTML = `<div class="card">⚠️ ${sanitize(String(e))}</div>`;
           el('raw').textContent = '';
           el('citations').innerHTML = '';
           el('highlights').innerHTML = '';
+          updateResultKPIs({citations:[],highlights:[],confidence:null});
         }
       }
-
       document.getElementById('askBtn').addEventListener('click', doAsk);
-      document.getElementById('q').addEventListener('keydown', (ev)=>{
-        if(ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)){ doAsk(); }
-      });
+      document.getElementById('q').addEventListener('keydown', (ev)=>{ if(ev.key==='Enter' && (ev.ctrlKey||ev.metaKey)){ doAsk(); } });
+
+      async function doReloadRules(){
+        const status = document.getElementById('ruleStatus');
+        status.textContent = 'Reloading…';
+        try{
+          const res = await fetch(`${API}/rules/reload`, { method:'POST' });
+          const data = await res.json();
+          if(!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+          status.textContent = `Reloaded: ${data.count} active rule(s)`;
+          updateRuleKPI('Reloaded');
+        }catch(e){
+          status.textContent = `Reload failed: ${String(e)}`;
+          updateRuleKPI('Reload failed');
+        }
+      }
+      document.getElementById('btnReload')?.addEventListener('click', (e)=>{ e.stopPropagation(); doReloadRules(); });
 
       async function doSuggestRule(){
+        focusTile('rules');
         const status = el('ruleStatus');
         const preview = el('rulePreview');
         status.textContent = 'Generating…';
         el('btnApply').disabled = true;
-      
+
         const payload = {
           prompt: el('rulePrompt').value.trim(),
           category: el('ruleCategory').value.trim() || null,
           severity: el('ruleSeverity').value.trim() || null,
         };
-        if (!payload.prompt){
-          status.textContent = 'Please enter a natural language rule.';
-          return;
-        }
-      
+        if (!payload.prompt){ status.textContent = 'Please enter a natural language rule.'; return; }
+
         try{
           const res = await fetch(`${API}/rules/suggest`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify(payload)
+            method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)
           });
           const data = await res.json();
           if(!res.ok){ throw new Error(data.detail || `HTTP ${res.status}`); }
           preview.textContent = data.yaml || '';
-          status.textContent = (data.warnings && data.warnings.length)
-            ? `Suggested (with warnings: ${data.warnings.join('; ')})`
-            : 'Suggested';
+          const msg = (data.warnings && data.warnings.length) ? `Suggested (with warnings)` : 'Suggested';
+          status.textContent = msg;
+          updateRuleKPI('Suggested');
           el('btnApply').disabled = !data.yaml;
         }catch(e){
           status.textContent = `Error: ${String(e)}`;
           preview.textContent = '';
           el('btnApply').disabled = true;
+          updateRuleKPI('Error');
         }
       }
-      
       async function doApplyRule(){
+        focusTile('rules');
         const status = el('ruleStatus');
         const yaml = el('rulePreview').textContent.trim();
-        if (!yaml){
-          status.textContent = 'No YAML to apply.';
-          return;
-        }
+        if (!yaml){ status.textContent = 'No YAML to apply.'; return; }
         status.textContent = 'Saving…';
         try{
           const res = await fetch(`${API}/rules/apply`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ yaml })
+            method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ yaml })
           });
           const data = await res.json();
           if(!res.ok){ throw new Error(data.detail || `HTTP ${res.status}`); }
           status.textContent = `Saved: ${data.message || 'ok'}`;
-          // Optionally, refresh rules engine in-memory if you cache rules
+          updateRuleKPI('Saved');
         }catch(e){
           status.textContent = `Error: ${String(e)}`;
+          updateRuleKPI('Error');
         }
       }
-      
-      document.getElementById('btnSuggest').addEventListener('click', doSuggestRule);
-      document.getElementById('btnApply').addEventListener('click', doApplyRule);
+      document.getElementById('btnSuggest').addEventListener('click', (e)=>{ e.stopPropagation(); doSuggestRule(); });
+      document.getElementById('btnApply').addEventListener('click', (e)=>{ e.stopPropagation(); doApplyRule(); });
 
-      // -------- Detect & Narrate state --------
-      let ANOMALIES = []; // last analyze results
-    
+      // -------- Detect & Narrate --------
+      let ANOMALIES = [];
       const $ = (id) => document.getElementById(id);
       const td = (html) => { const x=document.createElement('td'); x.innerHTML=html; return x; };
-    
       function riskChip(score){
-        let cls = 'warn';
-        if (score >= 80) cls = 'bad';
-        else if (score <= 40) cls = 'ok';
+        let cls = 'warn'; if (score >= 80) cls = 'bad'; else if (score <= 40) cls = 'ok';
         return `<span class="chip ${cls}">${score}</span>`;
       }
-    
       function renderAnomalies(rows){
-        const body = $('an_body');
-        body.innerHTML = '';
+        const body = $('an_body'); body.innerHTML = '';
         rows.forEach((a, i) => {
           const tr = document.createElement('tr');
           tr.style.borderTop = '1px solid var(--chip-brd)';
@@ -637,64 +637,52 @@
         $('btnNarrate').disabled = !rows.length;
         $('an_narr').style.display = 'none';
         $('an_narr_list').innerHTML = '';
+        updateDetectKPI(rows.length);
       }
-    
       async function doAnalyze(){
+        focusTile('detect');
         $('an_status').textContent = 'Searching & detecting…';
         $('an_results').style.display = 'none';
         $('an_narr').style.display = 'none';
         $('an_narr_list').innerHTML = '';
-    
+
         const q = $('an_q').value.trim() || null;
         const from = $('an_from').value ? new Date($('an_from').value).toISOString() : null;
         const to   = $('an_to').value   ? new Date($('an_to').value).toISOString()   : null;
         const top  = Number($('an_top').value || 50);
-    
+
         try{
           const res = await fetch(`${API}/analyze`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
+            method:'POST', headers:{ 'Content-Type':'application/json' },
             body: JSON.stringify({ query: q, time_min: from, time_max: to, top })
           });
-          if(!res.ok){
-            const err = await res.json().catch(()=> ({}));
-            throw new Error(err.detail || `${res.status} ${res.statusText}`);
-          }
-          const data = await res.json();  // { anomalies: [...] }
+          const data = await res.json();
+          if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
           ANOMALIES = Array.isArray(data.anomalies) ? data.anomalies : [];
           renderAnomalies(ANOMALIES);
           $('an_status').textContent = `Detected ${ANOMALIES.length} anomalies`;
         }catch(e){
           $('an_status').textContent = `Error: ${String(e)}`;
+          updateDetectKPI(0);
         }
       }
-    
       async function doNarrateSelected(){
+        focusTile('detect');
         const checks = Array.from(document.querySelectorAll('.an_sel')).filter(x => x.checked);
         if (!checks.length) return;
         const items = checks.map(t => {
           const i = Number(t.getAttribute('data-i'));
           const a = ANOMALIES[i];
-          return {
-            event_id: a.event_id,
-            signals:  a.signals || [],
-            risk_score: a.risk_score || 0
-          };
+          return { event_id: a.event_id, signals: a.signals || [], risk_score: a.risk_score || 0 };
         });
-    
+
         try{
           const res = await fetch(`${API}/narrative/from_anomalies`, {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json' },
-            body: JSON.stringify({ items })
+            method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ items })
           });
-          if(!res.ok){
-            const err = await res.json().catch(()=> ({}));
-            throw new Error(err.detail || `${res.status} ${res.statusText}`);
-          }
-          const data = await res.json(); // { items: [ { event_id, narrative, remediation[], linked_policies[] } ] }
-          const ul = $('an_narr_list');
-          ul.innerHTML = '';
+          const data = await res.json();
+          if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
+          const ul = $('an_narr_list'); ul.innerHTML = '';
           (data.items || []).forEach(n => {
             const li = document.createElement('li');
             const pol = (n.linked_policies||[]).map(p => `<code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code>`).join(' ');
@@ -720,17 +708,8 @@
           $('an_narr').style.display = 'block';
         }
       }
-    
-      $('btnAnalyze').addEventListener('click', doAnalyze);
-      $('btnNarrate').addEventListener('click', doNarrateSelected);
+      document.getElementById('btnAnalyze').addEventListener('click', (e)=>{ e.stopPropagation(); doAnalyze(); });
+      document.getElementById('btnNarrate').addEventListener('click', (e)=>{ e.stopPropagation(); doNarrateSelected(); });
     </script>
   </body>
 </html>
-
-
-
-
-
-
-
-
