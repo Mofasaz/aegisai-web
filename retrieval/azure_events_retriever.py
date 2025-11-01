@@ -1,6 +1,6 @@
 # retrieval/azure_events_retriever.py
 import os
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
 
