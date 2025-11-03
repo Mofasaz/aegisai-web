@@ -4,15 +4,17 @@ from fastapi import FastAPI, HTTPException, Response, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from api.models import *
 from api.chains import get_llm
 from rules.engine import analyze_events, load_rules_from_file, set_rules, get_rules
 from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restricted_hits
 from retrieval.azure_events_retriever import search_events
-from datetime import datetime, timezone
 from rules.intent import match_risky_intent
 from api.auth import require_user, UserPrincipal
+from analyze_nl import interpret_query, outside_hours_predicate, GST_TZ
 
 try:
     from integrations.powerbi import push_rows
@@ -433,23 +435,64 @@ def analyze(req: AnalyzeRequest):
     #if req.events:
     #    anomalies = analyze_events(req.events)
     #    return AnalyzeResponse(anomalies=anomalies)
+    # Step 1: interpret NL if present
+    intent = interpret_query(req.query)
 
+    # Step 2: pick effective time window: explicit > NL-inferred > none
+    time_min = req.time_min or intent["time_min"]
+    time_max = req.time_max or intent["time_max"]
+
+    # Step 3: build search args
+    search_text = intent["search_text"] or (req.query or "")
+    filters = intent["filters"].copy()
+
+    # You can mix text + filters. For Azure Search:
+    #   - use 'search' for text, 'filter' for OData eq on fields like user_role/status
+    #   - filter dates with timestamp ge/le in UTC if set
+    # Implement this inside your retriever; example signature:
+    # search_events(text: str, time_min: Optional[datetime], time_max: Optional[datetime], filters: dict, top: int) -> List[dict]
+    raw_events = search_events(
+        text=search_text,
+        time_min=time_min,
+        time_max=time_max,
+        filters=filters,
+        top=(req.top or 50)
+    )
+
+    # Step 4: apply outside-hours post-filter if requested
+    outside = intent["outside_hours"]
+    if outside:
+        start_hm, end_hm = outside
+        filtered = []
+        for ev in raw_events:
+            ts = ev.get("timestamp")
+            if not isinstance(ts, datetime):
+                # try parse if string
+                try:
+                    ts = datetime.fromisoformat(ts.replace("Z","+00:00"))
+                except Exception:
+                    continue
+            if outside_hours_predicate(ts, start_hm, end_hm):
+                filtered.append(ev)
+        events = filtered
+    else:
+        events = raw_events
     # 2) Otherwise, fetch from Azure AI Search (logs index)
-    try:
-        fetched = search_events(
-            query=(req.query or "*"),
-            time_min=req.time_min,
-            time_max=req.time_max,
-            top=(req.top or 50),
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}")
+    #try:
+    #    fetched = search_events(
+    #       query=(req.query or "*"),
+    #        time_min=req.time_min,
+    #        time_max=req.time_max,
+    #        top=(req.top or 50),
+    #    )
+    #except Exception as e:
+    #    raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}")
 
     # Map search results -> LogEvent models your rules engine understands
-    events: list[LogEvent] = []
-    for d in fetched:
+    logEvents: list[LogEvent] = []
+    for d in events:
         # Your logs index doesn’t carry risk_context; rules should tolerate None
-        events.append(LogEvent(
+        logEvents.append(LogEvent(
             event_id=d.get("event_id"),
             timestamp=str(d.get("timestamp")),
             action=d.get("action"),
@@ -466,8 +509,9 @@ def analyze(req: AnalyzeRequest):
             risk_context=d.get("risk_context") if isinstance(d.get("risk_context"), dict) else None,
         ))
 
-    anomalies = analyze_events(events)
+    anomalies = analyze_events(logEvents)
     return AnalyzeResponse(anomalies=anomalies)
+
 
 @app.post("/narrative", response_model=NarrativeResponse)
 def narrative(req: NarrativeRequest):
@@ -563,6 +607,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
