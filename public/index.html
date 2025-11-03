@@ -332,7 +332,8 @@
       
         // Show Answer tile only when Ask is active AND we already have a result
         if (tileResult) {
-          tileResult.style.display = (name === 'ask' && HAS_RESULT) ? '' : 'none';
+          const showResult = (name === 'ask' && HAS_RESULT);
+          tileResult.style.display = showResult ? '' : 'none';
         }
       
         // Normal active/collapsed behavior for the rest
@@ -345,6 +346,11 @@
             t.classList.remove('active');
             t.classList.add('collapsed');
           }
+        }
+
+        // Keep Answer expanded when Ask is focused and we have content
+        if (name === 'ask' && HAS_RESULT && tileResult) {
+          tileResult.classList.remove('collapsed');   // <- crucial line
         }
       }
 
@@ -547,18 +553,9 @@
 
         // Ensure we're on the Ask tile so Answer becomes visible
         focusTile('ask');
-
-        // 8) Also force panels visible in case tile CSS didn’t toggle yet
-        const show = HAS_RESULT;
-        const left  = document.getElementById('leftCol');
-        const right = document.getElementById('rightCol');
-        if (left)  left.style.display  = show ? 'block' : 'none';
-        if (right) right.style.display = show ? 'block' : 'none';
         
         // header KPIs
         updateResultKPIs(data);
-        
-
       }
 
       // ---------- API ----------
@@ -773,6 +770,7 @@
     </script>
   </body>
 </html>
+
 
 
 
