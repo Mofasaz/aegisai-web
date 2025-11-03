@@ -431,16 +431,30 @@ def analyze(req: AnalyzeRequest):
     - If req.events has items: analyze those (your current flow).
     - Else: pull events from Azure AI Search logs index (aegisai-logs-indx), then analyze.
     """
-    # 1) If client pasted events, use them directly
-    #if req.events:
-    #    anomalies = analyze_events(req.events)
-    #    return AnalyzeResponse(anomalies=anomalies)
+    # Mode A: direct events (paste-in) – optional
+    if req.events:
+        events = [
+            LogEvent(
+                event_id=e.event_id,
+                timestamp=e.timestamp,
+                action=e.action,
+                status=e.status,
+                user_role=e.user_role,
+                system=e.system,
+                location=e.location,
+                risk_context=e.risk_context if isinstance(e.risk_context, dict) else None,
+            ) for e in req.events
+        ]
+        anomalies = analyze_events(events)
+        return AnalyzeResponse(anomalies=anomalies)
+
+    
     # Step 1: interpret NL if present
-    intent: Dict[str, Any] = interpret_query(req.query)
+    intent = interpret_query(req.query)
 
     # Step 2: pick effective time window: explicit > NL-inferred > none
-    time_min: Optional[datetime] = req.time_min or intent.get("time_min")
-    time_max: Optional[datetime] = req.time_max or intent.get("time_max")
+    time_min = req.time_min or intent.get("time_min")
+    time_max = req.time_max or intent.get("time_max")
 
     # Step 3: build search args
     search_text = " ".join(
@@ -453,14 +467,13 @@ def analyze(req: AnalyzeRequest):
     # Implement this inside your retriever; example signature:
     # search_events(text: str, time_min: Optional[datetime], time_max: Optional[datetime], filters: dict, top: int) -> List[dict]
     try:
-        raw_events: List[Dict[str, Any]] = search_events(
-            text=search_text or "*",
+        raw_events: search_events(
+            text=search_text or None,
             time_min=time_min,
             time_max=time_max,
             top=(req.top or 50),
             filters=intent.get("filters") or {},
-            not_filters=intent.get("not_filters") or {},   # add param to retriever
-            order_by="timestamp desc"
+            not_filters=intent.get("not_filters") or {},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}") 
@@ -496,11 +509,7 @@ def analyze(req: AnalyzeRequest):
             user_role = d.get("user_role"),
             system = d.get("system"),
             location = d.get("location"),
-            user_dept = d.get("user_dept"),
-            resource = d.get("resource"),
-            target = d.get("target"),
-            source_ip = d.get("source_ip"),
-            auth = d.get("auth"),
+            user_dept=None, resource=None, target=None, source_ip=None, auth=None,
             risk_context = d.get("risk_context") if isinstance(d.get("risk_context"), dict) else None,
         ))
 
@@ -602,6 +611,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
