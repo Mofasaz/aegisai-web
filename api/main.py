@@ -490,37 +490,44 @@ def analyze(req: AnalyzeRequest):
         raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}") 
 
     # 5) Optional hour-band filtering (inside/non-peak/outside)
-    evs = raw_events
-     # normalize timestamps to datetime for hour checks
-    for ev in evs:
-        if not isinstance(ev.get("timestamp"), datetime):
-            ev_ts = _to_dt_loose(ev.get("timestamp"))
-            ev["timestamp"] = ev_ts  # may remain None if unparsable
-            
-    if intent.get("inside_hours"):
-        sh, eh = intent["inside_hours"]
-        evs = [
-            ev for ev in evs
-            if isinstance(ev.get("timestamp"), datetime)
-            and not outside_hours_predicate(ev["timestamp"], sh, eh)
-        ]
-    elif intent.get("outside_hours"):
-        sh, eh = intent["outside_hours"]
-        evs = [
-            ev for ev in evs
-            if isinstance(ev.get("timestamp"), datetime)
-            and outside_hours_predicate(ev["timestamp"], sh, eh)
-        ]
+    events = raw_events
+
+    inside = intent.get("inside_hours")
+    outside = intent.get("outside_hours")
+    
+    if inside or outside:
+        filtered = []
+        for ev in events:
+            ts = _to_dt(ev.get("timestamp"))
+            # If we cannot parse ts, keep the event (don’t drop data blindly).
+            if not ts:
+                filtered.append(ev)
+                continue
+    
+            if inside:
+                sh, eh = inside
+                keep = not outside_hours_predicate(ts, sh, eh)
+            else:  # outside
+                sh, eh = outside
+                keep = outside_hours_predicate(ts, sh, eh)
+    
+            if keep:
+                # Optionally carry the parsed dt forward so we don’t reparse later
+                ev = dict(ev)
+                ev["timestamp"] = ts
+                filtered.append(ev)
+        events = filtered
+
 
     # 6) Map result → LogEvent (engine-friendly)
     log_events: List[LogEvent] = []
-    for d in evs:
+    for d in events:
         ts = d.get("timestamp")
-        # Azure SDK/REST may give string; normalize to string ISO for your model
-        ts_str = ts.isoformat().replace("+00:00", "Z") if isinstance(ts, datetime) else str(ts or "")
+        dt = _to_dt(ts)
+        ts_out = dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z") if dt else (str(ts or ""))
         log_events.append(LogEvent(
             event_id = d.get("event_id"),
-            timestamp = ts_str,
+            timestamp = ts_out,
             action = d.get("action"),
             status = d.get("status"),
             user_role = d.get("user_role"),
@@ -628,6 +635,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
