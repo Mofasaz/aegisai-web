@@ -237,15 +237,11 @@ def search_events(
     # IMPORTANT: when using vector-only in Azure Search, set search_text=None;
     # for hybrid, you can pass a lightweight search_text to combine (requires service version that supports hybrid).
     search_text = (query or "*") if not vector_queries else None
-
-    # Build order list for SDK
-    order_by_list = [order_by] if order_by else None
     
     results = _client.search(
         search_text=search_text,
         filter=odata_filter,
         top=top,
-        order_by=["timestamp desc"],
         select=select_fields,
         query_type="simple",
         vector_queries=vector_queries,
