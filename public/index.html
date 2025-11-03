@@ -10,9 +10,8 @@
         --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444; --chip:#1b2540; --chip-brd:#2a3556; --ring:#2b3b67;
         --mh-from:#E8B84E; --mh-to:#D7951A; --mh-border:#A87008; --mh-glow:rgba(232,184,78,.35);
       }
-      
       *{box-sizing:border-box}
-      html,body{height:100%} 
+      html,body{height:100%}
       body{
         margin:0; padding:0; color:var(--text);
         background: radial-gradient(1200px 800px at 20% -10%, #1a2650 0%, #0b1020 55%);
@@ -43,6 +42,7 @@
         .tile, .tile.span2, .tile.span4, .tile.span6{ grid-column: span 1; }
       }
 
+      /* Tile frame */
       .tile{
         position:relative;
         background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
@@ -55,7 +55,10 @@
       }
       .tile:hover{ box-shadow:0 10px 30px rgba(0,0,0,.35); }
       .tile.active{ transform: scale(1.01); box-shadow:0 18px 38px rgba(0,0,0,.45); }
-
+      .tile.collapsed{
+        overflow: hidden;   /* ← preview-strip effect only in collapsed state */
+      }
+      /* Tile header */
       .tile-head{
         display:flex; align-items:center; gap:10px; padding:12px 14px;
         border-bottom:1px solid var(--chip-brd); user-select:none; cursor:pointer;
@@ -72,24 +75,13 @@
         max-height:60px; opacity:.75; pointer-events:none;
       }
 
-      /*.tile.active{ transform: scale(1.01); box-shadow: 0 16px 36px rgba(2,132,199,.10); }*/
-
-      /* Only clip when collapsed (preview strip) */
-      .tile.collapsed{ overflow: hidden; }
-
       /* Reusable UI bits */
       .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
       input, textarea, button{
         border-radius:12px; border:1px solid var(--ring); color:var(--text);
         background:#0e152a; outline:none;
       }
-      /*input, textarea{ width:100%; padding:10px 12px; }*/
-      /* Inputs/buttons on light theme */
-      input, textarea{
-        background: #ffffff;
-        color: var(--text);
-        border: 1px solid var(--ring);
-      }
+      input, textarea{ width:100%; padding:10px 12px; }
       textarea{ resize:vertical; min-height:84px }
       button{
         background: linear-gradient(135deg,#4ea1ff,#7c7cff);
@@ -97,13 +89,11 @@
         box-shadow:0 10px 24px rgba(78,161,255,.25);
       }
       button:hover{ filter:brightness(1.05) }
-
       .small{ color:var(--muted) }
       .card{
         background:#0f1730; border:1px solid var(--chip-brd);
         border-radius:14px; padding:12px; margin-top:10px;
       }
-     
       .badges{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
       .chip{
         display:inline-flex; align-items:center; gap:6px;
@@ -114,6 +104,7 @@
       .chip.warn{ background:rgba(245,158,11,.15); border-color:rgba(245,158,11,.35); color:#fde68a }
       .chip.bad{  background:rgba(239,68,68,.15);  border-color:rgba(239,68,68,.35);  color:#fecaca }
       .chip.gray{ color:#c7d2fe }
+
       .btn-marhaba{
         display:inline-flex; align-items:center; gap:6px;
         padding:8px 12px; border-radius:999px;
@@ -135,14 +126,12 @@
       ul.clean li{ padding:.55rem .65rem; border-radius:10px; margin:.3rem 0;
         background:rgba(255,255,255,.02); border:1px solid var(--chip-brd);
       }
-
       code{ background:rgba(255,255,255,.06); padding:2px 6px; border-radius:6px;
         border:1px solid var(--chip-brd); color:#c7d2fe; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
       }
-      
-      pre{ white-space:pre-wrap; word-break:break-word; background:#0b1226; padding:12px; border-radius:12px; border:1px solid var(--chip-brd) }
-      
       details{ margin-top:10px }
+      pre{ white-space:pre-wrap; word-break:break-word; background:#0b1226; padding:12px; border-radius:12px; border:1px solid var(--chip-brd) }
+
       /* Judge extras */
       .issue-badge{
         position:relative; display:inline-flex; align-items:center;
@@ -150,7 +139,7 @@
         color:#fca5a5; font-size:12px; padding:3px 8px; border-radius:8px;
         transition: transform .12s ease, background .12s ease;
       }
-    
+      .issue-badge:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); }
       .issue-badge[data-tip]::after{
         content:attr(data-tip); position:absolute; left:0; top:calc(100% + 6px);
         background:#0b1226; color:#e9eef6; border:1px solid var(--chip-brd);
@@ -158,8 +147,6 @@
         opacity:0; transform: translateY(-4px); pointer-events:none; transition: opacity .12s ease, transform .12s ease; z-index:30;
         box-shadow:0 8px 20px rgba(0,0,0,.35);
       }
-      
-      .issue-badge:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); }
       .issue-badge[data-tip]:hover::after{ opacity:1; transform:translateY(0); }
       .issue-badge[data-tip]::before{
         content:""; position:absolute; left:12px; top:calc(100% + 2px);
@@ -170,7 +157,6 @@
 
       /* Mini KPI badges inside tile headers */
       .kpi{ font-variation-settings:"wght" 650; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--chip-brd); background:#0f1730; }
-
       .kpi.ok{ color:#a6f4c5; border-color:rgba(22,163,74,.35); }
       .kpi.warn{ color:#fde68a; border-color:rgba(245,158,11,.35); }
       .kpi.bad{ color:#fecaca; border-color:rgba(239,68,68,.35); }
@@ -533,7 +519,7 @@
 
       function renderResult(data){
         // Ensure result tile is visible
-        focusTile('result');
+        //focusTile('result');
         const payload = data || {};
         // Raw JSON
         document.getElementById('raw').textContent = JSON.stringify(payload, null, 2);
@@ -782,11 +768,3 @@
     </script>
   </body>
 </html>
-
-
-
-
-
-
-
-
