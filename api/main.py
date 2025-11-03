@@ -457,9 +457,9 @@ def analyze(req: AnalyzeRequest):
             text=search_text or "*",
             time_min=time_min,
             time_max=time_max,
+            top=(req.top or 50),
             filters=intent.get("filters") or {},
             not_filters=intent.get("not_filters") or {},   # add param to retriever
-            top=(req.top or 50),
             order_by="timestamp desc"
         )
     except Exception as e:
@@ -602,6 +602,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
