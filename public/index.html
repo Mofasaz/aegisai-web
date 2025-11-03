@@ -5,17 +5,36 @@
     <title>AegisAI — Policy Copilot</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
+      /*
       :root{
         --bg:#0b1020; --panel:#121a2f; --muted:#8ea1b5; --text:#e9eef6; --accent:#4ea1ff;
         --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444; --chip:#1b2540; --chip-brd:#2a3556; --ring:#2b3b67;
         --mh-from:#E8B84E; --mh-to:#D7951A; --mh-border:#A87008; --mh-glow:rgba(232,184,78,.35);
+      }*/
+      :root{
+        --brand: #00AEEF;           /* dnata-like cyan; change to your exact code if needed */
+        --brand-dark: #008FC6;      /* darker shade for borders/hover */
+        --bg: #ffffff;              /* light page background */
+        --text: #0f172a;            /* slate-900-ish */
+        --muted: #475569;           /* slate-600 */
+        --panel: #ffffff;
+        --chip: #f8fafc;            /* light chips */
+        --chip-brd: #E6F6FD;        /* pale brand border */
+        --ring: #D7EEF9;            /* input borders */
+        --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444;
       }
       *{box-sizing:border-box}
       html,body{height:100%}
+      /* 
       body{
         margin:0; padding:0; color:var(--text);
         background: radial-gradient(1200px 800px at 20% -10%, #1a2650 0%, #0b1020 55%);
         font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      }*/
+      /* Page */
+      body{
+        background: #f7fbff; /* very light */
+        color: var(--text);
       }
       .wrap{max-width:1200px;margin:40px auto;padding:0 16px;}
       header{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
@@ -42,7 +61,7 @@
         .tile, .tile.span2, .tile.span4, .tile.span6{ grid-column: span 1; }
       }
 
-      /* Tile frame */
+      /* 
       .tile{
         position:relative;
         background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
@@ -52,18 +71,24 @@
         box-shadow:0 6px 24px rgba(0,0,0,.25);
         transition: transform .25s ease, box-shadow .25s ease, opacity .2s ease;
         cursor: default;
+      }*/
+      /* Tile frame */
+      .tile{
+        background: #fff;
+        border: 1px solid var(--chip-brd);
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(2,132,199,.06); /* subtle blue shadow */
+        overflow: visible; /* important: expanded tiles show fully */
       }
       .tile:hover{ box-shadow:0 10px 30px rgba(0,0,0,.35); }
-      .tile.active{ transform: scale(1.01); box-shadow:0 18px 38px rgba(0,0,0,.45); }
-      .tile.collapsed{
-        overflow: hidden;   /* ← preview-strip effect only in collapsed state */
-      }
-      /* Tile header */
+      /*.tile.active{ transform: scale(1.01); box-shadow:0 18px 38px rgba(0,0,0,.45); }*/
+
+      /*
       .tile-head{
         display:flex; align-items:center; gap:10px; padding:12px 14px;
         border-bottom:1px solid var(--chip-brd); user-select:none; cursor:pointer;
       }
-      .tile-head h3{ margin:0; font-size:15px; }
+      .tile-head h3{ margin:0; font-size:15px; }*/
       .tile-kpis{ margin-left:auto; display:flex; gap:8px; align-items:center; }
 
       /* Tile body animates height/opacity when collapsed */
@@ -75,27 +100,65 @@
         max-height:60px; opacity:.75; pointer-events:none;
       }
 
+      .tile.active{ transform: scale(1.01); box-shadow: 0 16px 36px rgba(2,132,199,.10); }
+
+      /* Only clip when collapsed (preview strip) */
+      .tile.collapsed{ overflow: hidden; }
+      
+      /* Tile header in dnata blue */
+      .tile-head{
+        background: linear-gradient(180deg, var(--brand), var(--brand-dark));
+        color: #fff;
+        border-bottom: 1px solid rgba(255,255,255,.25);
+      }
+      .tile-head h3{ color:#fff; }
+
       /* Reusable UI bits */
       .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
       input, textarea, button{
         border-radius:12px; border:1px solid var(--ring); color:var(--text);
         background:#0e152a; outline:none;
       }
-      input, textarea{ width:100%; padding:10px 12px; }
+      /*input, textarea{ width:100%; padding:10px 12px; }*/
+      /* Inputs/buttons on light theme */
+      input, textarea{
+        background: #ffffff;
+        color: var(--text);
+        border: 1px solid var(--ring);
+      }
       textarea{ resize:vertical; min-height:84px }
-      button{
+      /*button{
         background: linear-gradient(135deg,#4ea1ff,#7c7cff);
         border:none; padding:10px 16px; font-weight:600; cursor:pointer; color:white;
         box-shadow:0 10px 24px rgba(78,161,255,.25);
       }
-      button:hover{ filter:brightness(1.05) }
+      button:hover{ filter:brightness(1.05) }*/
+      button{
+        background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+        border: 1px solid var(--brand-dark);
+        color: #fff;
+        box-shadow: 0 10px 24px rgba(2,132,199,.20);
+      }
+      button:hover{ filter: brightness(1.03); }
+      
       .small{ color:var(--muted) }
-      .card{
+      /*.card{
         background:#0f1730; border:1px solid var(--chip-brd);
         border-radius:14px; padding:12px; margin-top:10px;
+      }*/
+      /* Panels and cards inside tiles */
+      .panel{
+        background: #ffffff;
+        border: 1px solid var(--chip-brd);
+        border-radius: 12px;
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.02);
+      }
+      .card{
+        background: #ffffff;
+        border: 1px solid var(--chip-brd);
       }
       .badges{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-      .chip{
+      /*.chip{
         display:inline-flex; align-items:center; gap:6px;
         background:var(--chip); border:1px solid var(--chip-brd);
         color:var(--text); font-size:12px; padding:4px 8px; border-radius:999px;
@@ -103,8 +166,17 @@
       .chip.ok{   background:rgba(22,163,74,.15);  border-color:rgba(22,163,74,.35);  color:#a6f4c5 }
       .chip.warn{ background:rgba(245,158,11,.15); border-color:rgba(245,158,11,.35); color:#fde68a }
       .chip.bad{  background:rgba(239,68,68,.15);  border-color:rgba(239,68,68,.35);  color:#fecaca }
-      .chip.gray{ color:#c7d2fe }
-
+      .chip.gray{ color:#c7d2fe }*/
+      /* Chips for light mode */
+      .chip{
+        background: #f1faff;
+        border: 1px solid var(--chip-brd);
+        color: #0c4a6e;
+      }
+      .chip.ok   { background:#ecfdf5; border-color:rgba(22,163,74,.25); color:#065f46; }
+      .chip.warn { background:#fff7ed; border-color:rgba(245,158,11,.25); color:#92400e; }
+      .chip.bad  { background:#fef2f2; border-color:rgba(239,68,68,.25); color:#991b1b; }
+      .chip.gray { background:#f8fafc; color:#334155; }
       .btn-marhaba{
         display:inline-flex; align-items:center; gap:6px;
         padding:8px 12px; border-radius:999px;
@@ -126,20 +198,37 @@
       ul.clean li{ padding:.55rem .65rem; border-radius:10px; margin:.3rem 0;
         background:rgba(255,255,255,.02); border:1px solid var(--chip-brd);
       }
+
+      /*
       code{ background:rgba(255,255,255,.06); padding:2px 6px; border-radius:6px;
         border:1px solid var(--chip-brd); color:#c7d2fe; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
       }
-      details{ margin-top:10px }
+      
       pre{ white-space:pre-wrap; word-break:break-word; background:#0b1226; padding:12px; border-radius:12px; border:1px solid var(--chip-brd) }
-
+      */
+      
+      details{ margin-top:10px }
+      /* Code/Pre */
+      code{
+        background:#f1faff;
+        border:1px solid var(--chip-brd);
+        color:#0c4a6e;
+      }
+      pre{
+        background:#f8fafc;
+        border:1px solid var(--chip-brd);
+        color:#0f172a;
+      }
       /* Judge extras */
+
+      /*
       .issue-badge{
         position:relative; display:inline-flex; align-items:center;
         background:rgba(255,255,255,.05); border:1px solid var(--chip-brd);
         color:#fca5a5; font-size:12px; padding:3px 8px; border-radius:8px;
         transition: transform .12s ease, background .12s ease;
       }
-      .issue-badge:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); }
+    
       .issue-badge[data-tip]::after{
         content:attr(data-tip); position:absolute; left:0; top:calc(100% + 6px);
         background:#0b1226; color:#e9eef6; border:1px solid var(--chip-brd);
@@ -147,6 +236,9 @@
         opacity:0; transform: translateY(-4px); pointer-events:none; transition: opacity .12s ease, transform .12s ease; z-index:30;
         box-shadow:0 8px 20px rgba(0,0,0,.35);
       }
+      */
+      
+      .issue-badge:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); }
       .issue-badge[data-tip]:hover::after{ opacity:1; transform:translateY(0); }
       .issue-badge[data-tip]::before{
         content:""; position:absolute; left:12px; top:calc(100% + 2px);
@@ -155,8 +247,24 @@
       }
       .issue-badge[data-tip]:hover::before{ opacity:1; }
 
+      /* Judge issue badges on light */
+      .issue-badge{
+        background:#fff;
+        border:1px solid #fee2e2;
+        color:#b91c1c;
+      }
+      .issue-badge[data-tip]::after{
+        background:#0b1226; color:#e9eef6; border:1px solid var(--chip-brd);
+      }
+
       /* Mini KPI badges inside tile headers */
-      .kpi{ font-variation-settings:"wght" 650; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--chip-brd); background:#0f1730; }
+      /*.kpi{ font-variation-settings:"wght" 650; font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--chip-brd); background:#0f1730; }*/
+      /* KPI pills in headers */
+      .kpi{
+        background:#e6f6fd;
+        border:1px solid var(--brand-dark);
+        color:#004b6e;
+      }
       .kpi.ok{ color:#a6f4c5; border-color:rgba(22,163,74,.35); }
       .kpi.warn{ color:#fde68a; border-color:rgba(245,158,11,.35); }
       .kpi.bad{ color:#fecaca; border-color:rgba(239,68,68,.35); }
@@ -519,7 +627,7 @@
 
       function renderResult(data){
         // Ensure result tile is visible
-        //focusTile('result');
+        focusTile('result');
         const payload = data || {};
         // Raw JSON
         document.getElementById('raw').textContent = JSON.stringify(payload, null, 2);
@@ -768,6 +876,7 @@
     </script>
   </body>
 </html>
+
 
 
 
