@@ -417,6 +417,9 @@
           .filter(Boolean)
           .map(s => `<li>${formatClauseBold(s)}</li>`)
           .join('');
+        if (!Array.isArray(bulletLines) || bulletLines.length === 0) {
+          console.warn('bulletsHTML: no bullet lines, raw text:', ans);
+        }
         return `<ul>${lis}</ul>`;
       }
       function looksLikeList(lines) {
@@ -510,33 +513,60 @@
         //focusTile('result');
 
         // raw json
-        el('raw').textContent = JSON.stringify(data, null, 2);
+        el('raw').textContent = JSON.stringify(data || {}, null, 2);
+
+        // 2) Pull an answer robustly (handles different shapes)
+        const ans =
+          text(
+            (data && (data.answer ?? data.Answer)) ||
+            (data && data.output) ||
+            (data && data.message) ||
+            ''
+          ).trim();
 
         // badges
-        el('metaBadges').innerHTML = renderBadges(data);
+        el('metaBadges').innerHTML = renderBadges(data || {});
 
-        // answer as bullets
-        el('answer').innerHTML = bulletsHTML(text(data.answer));
+        // 4) Render answer or a friendly fallback
+        if (ans) {
+          el('answer').innerHTML = bulletsHTML(ans) || `<div class="card">${sanitize(ans)}</div>`;
+        } else {
+          el('answer').innerHTML = `<div class="card">No answer in response.</div>`;
+        }
 
-        // citations + highlights
-        const citations = safeArray(data.citations || data.Citations);
+        // 5) Citations + highlights (be defensive on property names)
+        const citations = safeArray((data && (data.citations || data.Citations)) || []);
         renderCitations(citations);
 
         const citesByKey = new Map(citations.map(c=>[`${c.policy_id}/${c.clause_id}`, c]));
-        const highlights = safeArray(data.highlights || data.Highlights);
+        const highlights = safeArray((data && (data.highlights || data.Highlights)) || []);
         renderHighlights(highlights, citesByKey);
 
-        // header KPIs
-        updateResultKPIs(data);
+        // 6) Mark we have a result only if we truly have content
+        HAS_RESULT = !!ans || (citations.length + highlights.length) > 0;
 
-        HAS_RESULT = true;
         // Ensure we're on the Ask tile so Answer becomes visible
         focusTile('ask');
+
+        // 8) Also force panels visible in case tile CSS didn’t toggle yet
+        const show = HAS_RESULT;
+        const left  = document.getElementById('leftCol');
+        const right = document.getElementById('rightCol');
+        if (left)  left.style.display  = show ? 'block' : 'none';
+        if (right) right.style.display = show ? 'block' : 'none';
+        
+        // header KPIs
+        updateResultKPIs(data);
+        
 
       }
 
       // ---------- API ----------
       async function doAsk(){
+        // put Ask tile in focus and clear any stale state
+        focusTile('ask');
+        HAS_RESULT = false;
+
         const q = el('q').value.trim();
         updateAskKPI(q);
         el('status').textContent = 'Asking…';
@@ -548,6 +578,9 @@
           });
           const data = await res.json();
           if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
+          // after you parse the response in doAsk:
+          console.log('ASK response →', data);
+          
           renderResult(data);
           el('status').textContent = 'Done';
         }catch(e){
@@ -740,5 +773,6 @@
     </script>
   </body>
 </html>
+
 
 
