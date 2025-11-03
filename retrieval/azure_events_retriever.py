@@ -25,14 +25,13 @@ _client = SearchClient(
 )
 
 
-def _to_dt(x: Optional[Union[str, datetime]]) -> Optional[datetime]:
-    if x is None or x == "" or x == "null":
+def _to_dt(v):
+    if isinstance(v, datetime):
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+    if not v:
         return None
-    if isinstance(x, datetime):
-        return x if x.tzinfo else x.replace(tzinfo=timezone.utc)
-    
+    s = str(v)
     try:
-        s = str(x)
         if s.endswith("Z"):
             s = s[:-1] + "+00:00"
         dt = datetime.fromisoformat(s)
