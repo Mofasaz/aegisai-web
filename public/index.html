@@ -325,7 +325,7 @@
       const tileResult = document.getElementById('tile-result');
       
       // Start with Answer tile hidden until first success
-      if (tileResult) tileResult.style.display = 'none';
+      //if (tileResult) tileResult.style.display = 'none';
       
       // ---------- Tile focus logic ----------
       let ACTIVE = 'ask';
@@ -341,18 +341,19 @@
         // Normal active/collapsed behavior for the rest
         for (const t of document.querySelectorAll('.tile')) {
           const key = t.getAttribute('data-tile');
-          if (key === name) {
+          // Normal active/collapsed behavior
+          const isActive = (key === name);
+    
+          // SPECIAL: when Ask is active, also expand Result (satellite view)
+          const isResultSatellite = (name === 'ask' && key === 'result' && HAS_RESULT);
+
+          if (isActive || isResultSatellite) {
             t.classList.add('active');
             t.classList.remove('collapsed');
           } else {
             t.classList.remove('active');
             t.classList.add('collapsed');
           }
-        }
-
-        // Keep Answer expanded when Ask is focused and we have content
-        if (name === 'ask' && HAS_RESULT && tileResult) {
-          tileResult.classList.remove('collapsed');   // <- crucial line
         }
       }
 
@@ -519,45 +520,40 @@
       function renderResult(data){
         // Ensure result tile is visible
         //focusTile('result');
+        const payload = data || {};
+        // Raw JSON
+        document.getElementById('raw').textContent = JSON.stringify(payload, null, 2);
 
+        // Pull answer defensively
+        const ans = String(
+          payload.answer ?? payload.Answer ?? payload.output ?? payload.message ?? ''
+        ).trim();
+
+        // Badges
+        document.getElementById('metaBadges').innerHTML = renderBadges(payload);
+        
         // raw json
-        el('raw').textContent = JSON.stringify(data || {}, null, 2);
+        el('raw').textContent = JSON.stringify(payload, null, 2);
 
-        // 2) Pull an answer robustly (handles different shapes)
-        const ans =
-          text(
-            (data && (data.answer ?? data.Answer)) ||
-            (data && data.output) ||
-            (data && data.message) ||
-            ''
-          ).trim();
-
-        // badges
-        el('metaBadges').innerHTML = renderBadges(data || {});
-
-        // 4) Render answer or a friendly fallback
-        if (ans) {
-          el('answer').innerHTML = bulletsHTML(ans) || `<div class="card">${sanitize(ans)}</div>`;
-        } else {
-          el('answer').innerHTML = `<div class="card">No answer in response.</div>`;
-        }
+        // Answer
+        document.getElementById('answer').innerHTML = ans
+          ? (bulletsHTML(ans) || `<div class="card">${sanitize(ans)}</div>`)
+          : `<div class="card">No answer in response.</div>`;
 
         // 5) Citations + highlights (be defensive on property names)
-        const citations = safeArray((data && (data.citations || data.Citations)) || []);
+        const citations = safeArray(payload.citations || payload.Citations);
         renderCitations(citations);
 
         const citesByKey = new Map(citations.map(c=>[`${c.policy_id}/${c.clause_id}`, c]));
-        const highlights = safeArray((data && (data.highlights || data.Highlights)) || []);
+        const highlights = safeArray(payload.highlights || payload.Highlights);
         renderHighlights(highlights, citesByKey);
-
-        // 6) Mark we have a result only if we truly have content
-        HAS_RESULT = !!ans || (citations.length + highlights.length) > 0;
-
-        // Ensure we're on the Ask tile so Answer becomes visible
-        focusTile('ask');
         
         // header KPIs
-        updateResultKPIs(data);
+        updateResultKPIs(payload);
+
+        // Set flag first, then focus Ask (which expands Result as satellite)
+        HAS_RESULT = !!ans || (citations.length + highlights.length) > 0;
+        focusTile('ask');
       }
 
       // ---------- API ----------
@@ -772,6 +768,7 @@
     </script>
   </body>
 </html>
+
 
 
 
