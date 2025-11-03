@@ -25,16 +25,18 @@ _client = SearchClient(
 )
 
 
-def _to_dt(x: Union[str, datetime, None]) -> Optional[datetime]:
-    if x is None:
+def _to_dt(x: Optional[Union[str, datetime]]) -> Optional[datetime]:
+    if x is None or x == "" or x == "null":
         return None
     if isinstance(x, datetime):
         return x if x.tzinfo else x.replace(tzinfo=timezone.utc)
-    # string
-    s = x.strip()
+    
     try:
-        # tolerate Z or offset
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        s = str(x)
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except Exception:
         return None
 
@@ -44,8 +46,6 @@ def _esc(val: Any) -> str:
     return str(val).replace("'", "''")
 
 def _iso_z(dt: datetime) -> str:
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     
 def get_events_by_ids(ids: List[str]) -> List[Dict[str, Any]]:
@@ -123,14 +123,11 @@ def _build_time_filter(time_min: Optional[Union[str, datetime]],
     dt_min = _to_dt(time_min)
     dt_max = _to_dt(time_max)
     if dt_min:
-        parts.append(f"timestamp ge {_json_string(_iso_z(dt_min))}")
+        # NO quotes for DateTimeOffset
+        parts.append(f"timestamp ge {_iso_z(dt_min)}")
     if dt_max:
-        parts.append(f"timestamp le {_json_string(_iso_z(dt_max))}")
+        parts.append(f"timestamp le {_iso_z(dt_max)}")
     return parts
-
-def _json_string(s: str) -> str:
-    # Cheap JSON string literal without importing json (avoids escaping issues for ISO only)
-    return f"\"{s}\""
 
 
 def _build_filter_odata(
@@ -153,11 +150,9 @@ def _build_filter_odata(
     for field, value in (not_filters or {}).items():
         if value is None or value == "":
             continue
-        parts.append(f"not ({field} eq '{_esc(value)}')")
+        parts.append(f"{field} ne '{_esc(value)}'")
 
-    if not parts:
-        return None
-    return " and ".join(parts)
+    return " and ".join(parts) if parts else None
 
 
 # --- Vector helpers (optional) ---
