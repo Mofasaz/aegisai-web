@@ -196,14 +196,13 @@ def _vector_query(q: str) -> Tuple[Optional[dict], Optional[str]]:
 
 # --- Main search ---
 def search_events(
-    text: Optional[str],
-    time_min: Optional[Union[str, datetime]],
-    time_max: Optional[Union[str, datetime]],
-    top: int = 50,
     *,
+    query: Optional[str],
+    time_min: Optional[datetime],
+    time_max: Optional[datetime],
+    top: int = 50,
     filters: Optional[Dict[str, Any]] = None,
     not_filters: Optional[Dict[str, Any]] = None,
-    order_by: Optional[str] = "timestamp desc",
 ) -> List[dict]:
     """
     Hybrid search over aegisai-logs-indx:
@@ -230,15 +229,14 @@ def search_events(
     # - If vector enabled and we have a query → include vectorQueries + search_text (empty or query)
     # - Else fall back to keyword search over indexed searchable fields (action, user_role, system, location, title, status, log_summary)
     vector_queries = None
-    q_text = (text or "").strip()
-    if USE_EVENTS_VECTOR and q_text:
-        vq, _ = _vector_query(q_text)
+    if USE_EVENTS_VECTOR and (query or "").strip():
+        vq, _ = _vector_query(query or "")
         if vq:
             vector_queries = [vq]
 
     # IMPORTANT: when using vector-only in Azure Search, set search_text=None;
     # for hybrid, you can pass a lightweight search_text to combine (requires service version that supports hybrid).
-    search_text = (q_text or "*") if not vector_queries else None
+    search_text = (query or "*") if not vector_queries else None
 
     # Build order list for SDK
     order_by_list = [order_by] if order_by else None
@@ -247,20 +245,17 @@ def search_events(
         search_text=search_text,
         filter=odata_filter,
         top=top,
-        order_by=order_by_list,
+        order_by=["timestamp desc"],
         select=select_fields,
         query_type="simple",
-        vector_queries=vector_queries,  # None if vector disabled/unavailable
-        search_mode="any",
+        vector_queries=vector_queries,
     )
 
     out: List[dict] = []
     for r in results:
-        ts_raw = _sel(r, "timestamp")
-        ts_dt = _to_dt(ts_raw)
         out.append({
             "event_id":  _sel(r, "event_id"),
-            "timestamp": ts_dt if ts_dt else ts_raw,  # prefer datetime for downstream hour-band logic,
+            "timestamp": _sel(r, "timestamp"),  # prefer datetime for downstream hour-band logic,
             "action":    _sel(r, "action"),
             "status":    _sel(r, "status"),
             "user_role": _sel(r, "user_role"),
