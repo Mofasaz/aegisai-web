@@ -1,5 +1,6 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, conint
+from datetime import datetime
 
 # /ask
 class AskRequest(BaseModel):
@@ -41,9 +42,9 @@ class AskResponseV2(BaseModel):
 # /analyze
 class LogEvent(BaseModel):
     # core
-    event_id: str
-    timestamp: str                  # ISO8601 with Z or ±offset
-    action: str                     # e.g., login, access_denied, data_access, data_delete, file_upload ...
+    event_id: Optional[str] = None
+    timestamp: Optional[str] = None                  # ISO8601 with Z or ±offset
+    action: Optional[str] = None                     # e.g., login, access_denied, data_access, data_delete, file_upload ...
     status: Optional[str] = None    # success | failed
 
     # your schema
@@ -68,20 +69,35 @@ class Config:
 
 class Anomaly(BaseModel):
     event_id: str
-    signals: List[str]
-    risk_score: int
-    explain: str
+    signals: List[str] = []
+    risk_score: int = 0
+    explain: Optional[str] = None
 
+def _parse_dt(v: Optional[str]) -> Optional[datetime]:
+    if v in (None, "", "null"):  # accept nulls
+        return None
+    if isinstance(v, datetime):
+        return v
+    try:
+        # accept '...Z' or offsetless
+        return datetime.fromisoformat(v.replace("Z", "+00:00"))
+    except Exception:
+        return None  # let validator surface issue
+        
 class AnalyzeRequest(BaseModel):
+    query: Optional[str] = None
+    time_min: Optional[datetime] = None
+    time_max: Optional[datetime] = None
+    top: conint(gt=0, le=500) = 50
     events: List[LogEvent]
-    # NEW (optional) — if events are not supplied, the API will fetch from Azure Search
-    query: Optional[str] = None          # e.g., "login failed" or "*" for all
-    time_min: Optional[str] = None       # ISO8601, e.g., "2025-10-23T00:00:00Z"
-    time_max: Optional[str] = None       # ISO8601, e.g., "2025-10-26T00:00:00Z"
-    top: Optional[int] = 50              # cap number of events fetched
+    # accept strings for time_min/time_max
+    @validator("time_min", pre=True)
+    def _vm(cls, v): return _parse_dt(v)
+    @validator("time_max", pre=True)
+    def _vx(cls, v): return _parse_dt(v)
 
 class AnalyzeResponse(BaseModel):
-    anomalies: List[Anomaly]
+    anomalies: List[Anomaly] = []
 
 # /narrative
 class NarrativeRequestItem(BaseModel):
@@ -157,6 +173,7 @@ class RuleApplyRequest(BaseModel):
 class RuleApplyResponse(BaseModel):
     status: str
     message: Optional[str] = None
+
 
 
 
