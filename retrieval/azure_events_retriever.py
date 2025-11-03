@@ -1,6 +1,8 @@
 # retrieval/azure_events_retriever.py
 import os
-from typing import List, Optional, Tuple, Dict, Any
+from __future__ import annotations
+from datetime import datetime, timezone
+from typing import List, Optional, Tuple, Dict, Any, Union
 from azure.core.credentials import AzureKeyCredential
 from azure.search.documents import SearchClient
 
@@ -22,6 +24,30 @@ _client = SearchClient(
     credential=AzureKeyCredential(EVENTS_KEY),
 )
 
+
+def _to_dt(x: Union[str, datetime, None]) -> Optional[datetime]:
+    if x is None:
+        return None
+    if isinstance(x, datetime):
+        return x if x.tzinfo else x.replace(tzinfo=timezone.utc)
+    # string
+    s = x.strip()
+    try:
+        # tolerate Z or offset
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _esc(val: Any) -> str:
+    # Escape single quotes for OData
+    return str(val).replace("'", "''")
+
+def _iso_z(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    
 def get_events_by_ids(ids: List[str]) -> List[Dict[str, Any]]:
     if not ids:
         return []
@@ -91,13 +117,48 @@ def _sel(d, k, default=None):
         # support dotted fields if needed in future (not used here)
         return getattr(d, k, default)
 
-def _build_time_filter(time_min: Optional[str], time_max: Optional[str]) -> Optional[str]:
-    parts = []
-    if time_min:
-        parts.append(f"timestamp ge {time_min!r}")  # '2025-10-30T00:00:00Z'
-    if time_max:
-        parts.append(f"timestamp le {time_max!r}")
-    return " and ".join(parts) if parts else None
+def _build_time_filter(time_min: Optional[Union[str, datetime]],
+                       time_max: Optional[Union[str, datetime]]) -> List[str]:
+    parts: List[str] = []
+    dt_min = _to_dt(time_min)
+    dt_max = _to_dt(time_max)
+    if dt_min:
+        parts.append(f"timestamp ge {_json_string(_iso_z(dt_min))}")
+    if dt_max:
+        parts.append(f"timestamp le {_json_string(_iso_z(dt_max))}")
+    return parts
+
+def _json_string(s: str) -> str:
+    # Cheap JSON string literal without importing json (avoids escaping issues for ISO only)
+    return f"\"{s}\""
+
+
+def _build_filter_odata(
+    time_min: Optional[Union[str, datetime]],
+    time_max: Optional[Union[str, datetime]],
+    filters: Optional[Dict[str, Any]] = None,
+    not_filters: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    parts: List[str] = []
+    # time window
+    parts.extend(_build_time_filter(time_min, time_max))
+
+    # positive equals
+    for field, value in (filters or {}).items():
+        if value is None or value == "":
+            continue
+        parts.append(f"{field} eq '{_esc(value)}'")
+
+    # negative equals
+    for field, value in (not_filters or {}).items():
+        if value is None or value == "":
+            continue
+        parts.append(f"not ({field} eq '{_esc(value)}')")
+
+    if not parts:
+        return None
+    return " and ".join(parts)
+
 
 # --- Vector helpers (optional) ---
 def _embed_query(q: str) -> Optional[List[float]]:
@@ -135,21 +196,33 @@ def _vector_query(q: str) -> Tuple[Optional[dict], Optional[str]]:
 
 # --- Main search ---
 def search_events(
-    query: Optional[str],
-    time_min: Optional[str],
-    time_max: Optional[str],
+    text: Optional[str],
+    time_min: Optional[Union[str, datetime]],
+    time_max: Optional[Union[str, datetime]],
     top: int = 50,
+    *,
+    filters: Optional[Dict[str, Any]] = None,
+    not_filters: Optional[Dict[str, Any]] = None,
+    order_by: Optional[str] = "timestamp desc",
 ) -> List[dict]:
     """
-    Matches your aegisai-logs-indx fields:
-      event_id (key), timestamp (DateTimeOffset), action, user_role, system, location, status
-    Also supports hybrid (keyword + vector on log_vector) if EVENTS_USE_VECTOR=true.
+    Hybrid search over aegisai-logs-indx:
+      - Keyword (search_text) over searchable fields
+      - Optional vectorQueries over log_vector when USE_EVENTS_VECTOR = True
+
+    Accepts NL-derived filters:
+      filters     -> { field: value }   -> field eq 'value'
+      not_filters -> { field: value }   -> not (field eq 'value')
+
+    time_min/time_max may be str ISO8601 or datetime (UTC assumed if naive).
     """
-    flt = _build_time_filter(time_min, time_max)
+    # Build OData filter
+    odata_filter = _build_filter_odata(time_min, time_max, filters, not_filters)
 
     select_fields = [
         "event_id", "timestamp", "action", "status",
         "user_role", "system", "location",
+        # "user_dept","resource","target","source_ip","auth","risk_context"
         # You also have: title, id, log_summary, AzureSearch_DocumentKey; fetch if needed.
     ]
 
@@ -157,35 +230,49 @@ def search_events(
     # - If vector enabled and we have a query → include vectorQueries + search_text (empty or query)
     # - Else fall back to keyword search over indexed searchable fields (action, user_role, system, location, title, status, log_summary)
     vector_queries = None
-    if USE_EVENTS_VECTOR and (query or "").strip():
-        vq, _ = _vector_query(query or "")
+    q_text = (text or "").strip()
+    if USE_EVENTS_VECTOR and q_text:
+        vq, _ = _vector_query(q_text)
         if vq:
             vector_queries = [vq]
 
     # IMPORTANT: when using vector-only in Azure Search, set search_text=None;
     # for hybrid, you can pass a lightweight search_text to combine (requires service version that supports hybrid).
-    search_text = (query or "*") if not vector_queries else None
+    search_text = (q_text or "*") if not vector_queries else None
 
+    # Build order list for SDK
+    order_by_list = [order_by] if order_by else None
+    
     results = _client.search(
         search_text=search_text,
-        filter=flt,
+        filter=odata_filter,
         top=top,
-        order_by=["timestamp desc"],
+        order_by=order_by_list,
         select=select_fields,
         query_type="simple",
         vector_queries=vector_queries,  # None if vector disabled/unavailable
+        search_mode="any",
     )
 
     out: List[dict] = []
     for r in results:
+        ts_raw = _sel(r, "timestamp")
+        ts_dt = _to_dt(ts_raw)
         out.append({
             "event_id":  _sel(r, "event_id"),
-            "timestamp": _sel(r, "timestamp"),
+            "timestamp": ts_dt if ts_dt else ts_raw,  # prefer datetime for downstream hour-band logic,
             "action":    _sel(r, "action"),
             "status":    _sel(r, "status"),
             "user_role": _sel(r, "user_role"),
             "system":    _sel(r, "system"),
             "location":  _sel(r, "location"),
             # risk_context not present in your index—left out intentionally
+            # Include these only if you added to select_fields + index schema:
+            # "user_dept": _sel(r, "user_dept"),
+            # "resource":  _sel(r, "resource"),
+            # "target":    _sel(r, "target"),
+            # "source_ip": _sel(r, "source_ip"),
+            # "auth":      _sel(r, "auth"),
+            # "risk_context": _sel(r, "risk_context"),
         })
     return out
