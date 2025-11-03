@@ -14,7 +14,7 @@ from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restr
 from retrieval.azure_events_retriever import search_events
 from rules.intent import match_risky_intent
 from api.auth import require_user, UserPrincipal
-from api.analyze_nl import interpret_query, outside_hours_predicate, GST_TZ
+from api.analyze_nl import interpret_query, outside_hours_predicate
 
 try:
     from integrations.powerbi import push_rows
@@ -223,6 +223,16 @@ def _llm_rule_yaml_from_prompt(prompt: str, category: Optional[str], severity: O
     }
     out = llm.invoke([sys, user])
     return getattr(out, "content", str(out)).strip()
+
+def _to_dt_loose(v: Optional[str | datetime]) -> Optional[datetime]:
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except Exception:
+        return None
 
 @app.post("/ask", response_model=AskResponseV2)
 def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(require_user)):
@@ -443,6 +453,7 @@ def analyze(req: AnalyzeRequest):
                 system=e.system,
                 location=e.location,
                 risk_context=e.risk_context if isinstance(e.risk_context, dict) else None,
+                user_dept=None, resource=None, target=None, source_ip=None, auth=None,
             ) for e in req.events
         ]
         anomalies = analyze_events(events)
@@ -459,7 +470,7 @@ def analyze(req: AnalyzeRequest):
     # Step 3: build search args
     search_text = " ".join(
         [x for x in [(intent.get("search_text") or ""), *intent.get("must_terms", [])] if x]
-    ).strip()
+    ).strip() or None
 
     # You can mix text + filters. For Azure Search:
     #   - use 'search' for text, 'filter' for OData eq on fields like user_role/status
@@ -468,10 +479,10 @@ def analyze(req: AnalyzeRequest):
     # search_events(text: str, time_min: Optional[datetime], time_max: Optional[datetime], filters: dict, top: int) -> List[dict]
     try:
         raw_events: search_events(
-            text=search_text or None,
+            text=search_text,
             time_min=time_min,
             time_max=time_max,
-            top=(req.top or 50),
+            top=req.top,
             filters=intent.get("filters") or {},
             not_filters=intent.get("not_filters") or {},
         )
@@ -479,25 +490,31 @@ def analyze(req: AnalyzeRequest):
         raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}") 
 
     # 5) Optional hour-band filtering (inside/non-peak/outside)
-    events = raw_events
+    evs = raw_events
+     # normalize timestamps to datetime for hour checks
+    for ev in evs:
+        if not isinstance(ev.get("timestamp"), datetime):
+            ev_ts = _to_dt_loose(ev.get("timestamp"))
+            ev["timestamp"] = ev_ts  # may remain None if unparsable
+            
     if intent.get("inside_hours"):
         sh, eh = intent["inside_hours"]
-        events = [
-            ev for ev in events
+        evs = [
+            ev for ev in evs
             if isinstance(ev.get("timestamp"), datetime)
             and not outside_hours_predicate(ev["timestamp"], sh, eh)
         ]
     elif intent.get("outside_hours"):
         sh, eh = intent["outside_hours"]
-        events = [
-            ev for ev in events
+        evs = [
+            ev for ev in evs
             if isinstance(ev.get("timestamp"), datetime)
             and outside_hours_predicate(ev["timestamp"], sh, eh)
         ]
 
     # 6) Map result → LogEvent (engine-friendly)
     log_events: List[LogEvent] = []
-    for d in events:
+    for d in evs:
         ts = d.get("timestamp")
         # Azure SDK/REST may give string; normalize to string ISO for your model
         ts_str = ts.isoformat().replace("+00:00", "Z") if isinstance(ts, datetime) else str(ts or "")
@@ -611,6 +628,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
