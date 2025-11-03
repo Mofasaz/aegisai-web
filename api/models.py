@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict, conint
+from pydantic import BaseModel, Field, ConfigDict, conint, validator
 from datetime import datetime
 
 # /ask
@@ -48,7 +48,7 @@ class LogEvent(BaseModel):
     status: Optional[str] = None    # success | failed
 
     # your schema
-    role: Optional[str] = Field(None, alias="user_role")
+    user_role: Optional[str] = None
     system: Optional[str] = None
     location: Optional[str] = None
 
@@ -89,7 +89,7 @@ class AnalyzeRequest(BaseModel):
     time_min: Optional[datetime] = None
     time_max: Optional[datetime] = None
     top: conint(gt=0, le=500) = 50
-    events: List[LogEvent]
+    events: Optional[List[LogEvent]] = None
     # accept strings for time_min/time_max
     @validator("time_min", pre=True)
     def _vm(cls, v): return _parse_dt(v)
@@ -173,6 +173,7 @@ class RuleApplyRequest(BaseModel):
 class RuleApplyResponse(BaseModel):
     status: str
     message: Optional[str] = None
+
 
 
 
