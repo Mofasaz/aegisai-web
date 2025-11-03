@@ -452,10 +452,11 @@ def analyze(req: AnalyzeRequest):
     # Implement this inside your retriever; example signature:
     # search_events(text: str, time_min: Optional[datetime], time_max: Optional[datetime], filters: dict, top: int) -> List[dict]
     raw_events = search_events(
-        text=search_text,
+        text=" ".join([intent["search_text"], *intent["must_terms"]]).strip(),
         time_min=time_min,
         time_max=time_max,
-        filters=filters,
+        filters=intent["filters"],
+        not_filters=intent.get("not_filters"),   # add param to retriever
         top=(req.top or 50)
     )
 
@@ -607,6 +608,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
