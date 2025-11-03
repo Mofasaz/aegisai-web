@@ -20,22 +20,9 @@ _OUTSIDE_HOURS_RE = re.compile(
     re.I
 )
 
-ROLE_MAP = {
-    "crew": "Cabin Crew",
-    "cabin crew": "Cabin Crew",
-    "pilots": "Pilot",
-    "pilot": "Pilot",
-    "ground staff": "Ground Staff",
-    "cargo": "Cargo",
-    "cargo staff": "Cargo",
-    "hr": "HR",
-    "hr personnel": "HR",
-    "hr managers": "HR Manager",
-    "it": "IT",
-    "it admin": "IT Admin",
-    "maintenance engineers": "Maintenance",
-    "flight ops": "Flight Operations",
-}
+ROLE_EQ = {"cabin crew": "Cabin Crew", "ground staff": "Ground Staff", "pilot": "Pilot", "it admin": "IT Admin"}
+ROLE_FAMILY_TERMS = {"cargo", "hr", "hr personnel", "hr managers", "hr manager", "hr coordinator"}
+
 
 ACTION_HINTS = {
     "login": ["login","sign-in","signin","sign_in","auth"],
@@ -151,10 +138,18 @@ def interpret_query(query: Optional[str]) -> Dict[str, Any]:
     q = (query or "").lower()
 
     # roles
-    for k, v in ROLE_MAP.items():
-        if k in q:
-            intent["filters"]["user_role"] = v
+    for phrase, exact in ROLE_EQ.items():
+        if phrase in q:
+            intent["filters"]["user_role"] = exact
             break
+        else:
+            # no exact match → look for families that should be keyword-only
+            for fam in ROLE_FAMILY_TERMS:
+                if fam in q:
+                    # use as must-term to hit 'Cargo Supervisor', 'Cargo Manager', 'HR Manager', etc.
+                    intent["must_terms"].append("cargo" if "cargo" in fam else "hr")
+                    # do NOT set filters["user_role"] here
+                    break
 
     # statuses
     if "success" in q and "failed" in q:
