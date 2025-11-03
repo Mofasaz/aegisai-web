@@ -478,7 +478,7 @@ def analyze(req: AnalyzeRequest):
     # Implement this inside your retriever; example signature:
     # search_events(text: str, time_min: Optional[datetime], time_max: Optional[datetime], filters: dict, top: int) -> List[dict]
     try:
-        raw_events: search_events(
+        raw_events = search_events(
             text=search_text,
             time_min=time_min,
             time_max=time_max,
@@ -628,6 +628,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
