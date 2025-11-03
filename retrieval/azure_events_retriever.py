@@ -1,6 +1,6 @@
 # retrieval/azure_events_retriever.py
-import os
 from __future__ import annotations
+import os
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple, Dict, Any, Union
 from azure.core.credentials import AzureKeyCredential
