@@ -14,7 +14,7 @@ from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restr
 from retrieval.azure_events_retriever import search_events
 from rules.intent import match_risky_intent
 from api.auth import require_user, UserPrincipal
-from analyze_nl import interpret_query, outside_hours_predicate, GST_TZ
+from api.analyze_nl import interpret_query, outside_hours_predicate, GST_TZ
 
 try:
     from integrations.powerbi import push_rows
@@ -602,6 +602,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
