@@ -436,81 +436,75 @@ def analyze(req: AnalyzeRequest):
     #    anomalies = analyze_events(req.events)
     #    return AnalyzeResponse(anomalies=anomalies)
     # Step 1: interpret NL if present
-    intent = interpret_query(req.query)
+    intent: Dict[str, Any] = interpret_query(req.query)
 
     # Step 2: pick effective time window: explicit > NL-inferred > none
-    time_min = req.time_min or intent["time_min"]
-    time_max = req.time_max or intent["time_max"]
+    time_min: Optional[datetime] = req.time_min or intent.get("time_min")
+    time_max: Optional[datetime] = req.time_max or intent.get("time_max")
 
     # Step 3: build search args
-    search_text = intent["search_text"] or (req.query or "")
-    filters = intent["filters"].copy()
+    search_text = " ".join(
+        [x for x in [(intent.get("search_text") or ""), *intent.get("must_terms", [])] if x]
+    ).strip()
 
     # You can mix text + filters. For Azure Search:
     #   - use 'search' for text, 'filter' for OData eq on fields like user_role/status
     #   - filter dates with timestamp ge/le in UTC if set
     # Implement this inside your retriever; example signature:
     # search_events(text: str, time_min: Optional[datetime], time_max: Optional[datetime], filters: dict, top: int) -> List[dict]
-    raw_events = search_events(
-        text=" ".join([intent["search_text"], *intent["must_terms"]]).strip(),
-        time_min=time_min,
-        time_max=time_max,
-        filters=intent["filters"],
-        not_filters=intent.get("not_filters"),   # add param to retriever
-        top=(req.top or 50)
-    )
+    try:
+        raw_events: List[Dict[str, Any]] = search_events(
+            text=search_text or "*",
+            time_min=time_min,
+            time_max=time_max,
+            filters=intent.get("filters") or {},
+            not_filters=intent.get("not_filters") or {},   # add param to retriever
+            top=(req.top or 50),
+            order_by="timestamp desc"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}") 
 
-    # Step 4: apply outside-hours post-filter if requested
-    outside = intent["outside_hours"]
-    if outside:
-        start_hm, end_hm = outside
-        filtered = []
-        for ev in raw_events:
-            ts = ev.get("timestamp")
-            if not isinstance(ts, datetime):
-                # try parse if string
-                try:
-                    ts = datetime.fromisoformat(ts.replace("Z","+00:00"))
-                except Exception:
-                    continue
-            if outside_hours_predicate(ts, start_hm, end_hm):
-                filtered.append(ev)
-        events = filtered
-    else:
-        events = raw_events
-    # 2) Otherwise, fetch from Azure AI Search (logs index)
-    #try:
-    #    fetched = search_events(
-    #       query=(req.query or "*"),
-    #        time_min=req.time_min,
-    #        time_max=req.time_max,
-    #        top=(req.top or 50),
-    #    )
-    #except Exception as e:
-    #    raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}")
+    # 5) Optional hour-band filtering (inside/non-peak/outside)
+    events = raw_events
+    if intent.get("inside_hours"):
+        sh, eh = intent["inside_hours"]
+        events = [
+            ev for ev in events
+            if isinstance(ev.get("timestamp"), datetime)
+            and not outside_hours_predicate(ev["timestamp"], sh, eh)
+        ]
+    elif intent.get("outside_hours"):
+        sh, eh = intent["outside_hours"]
+        events = [
+            ev for ev in events
+            if isinstance(ev.get("timestamp"), datetime)
+            and outside_hours_predicate(ev["timestamp"], sh, eh)
+        ]
 
-    # Map search results -> LogEvent models your rules engine understands
-    logEvents: list[LogEvent] = []
+    # 6) Map result → LogEvent (engine-friendly)
+    log_events: List[LogEvent] = []
     for d in events:
-        # Your logs index doesn’t carry risk_context; rules should tolerate None
-        logEvents.append(LogEvent(
-            event_id=d.get("event_id"),
-            timestamp=str(d.get("timestamp")),
-            action=d.get("action"),
-            status=d.get("status"),
-            user_role=d.get("user_role"),
-            system=d.get("system"),
-            location=d.get("location"),
-            # legacy/optional fields (engine is lenient)
-            user_dept=None,
-            resource=None,
-            target=None,
-            source_ip=None,
-            auth=None,
-            risk_context=d.get("risk_context") if isinstance(d.get("risk_context"), dict) else None,
+        ts = d.get("timestamp")
+        # Azure SDK/REST may give string; normalize to string ISO for your model
+        ts_str = ts.isoformat().replace("+00:00", "Z") if isinstance(ts, datetime) else str(ts or "")
+        log_events.append(LogEvent(
+            event_id = d.get("event_id"),
+            timestamp = ts_str,
+            action = d.get("action"),
+            status = d.get("status"),
+            user_role = d.get("user_role"),
+            system = d.get("system"),
+            location = d.get("location"),
+            user_dept = d.get("user_dept"),
+            resource = d.get("resource"),
+            target = d.get("target"),
+            source_ip = d.get("source_ip"),
+            auth = d.get("auth"),
+            risk_context = d.get("risk_context") if isinstance(d.get("risk_context"), dict) else None,
         ))
 
-    anomalies = analyze_events(logEvents)
+    anomalies = analyze_events(log_events)
     return AnalyzeResponse(anomalies=anomalies)
 
 
@@ -608,6 +602,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
