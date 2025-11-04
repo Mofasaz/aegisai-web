@@ -109,6 +109,8 @@ class LinkedPolicy(BaseModel):
     policy_id: str
     clause_id: str
     clause_text: Optional[str] = None      # ← short snippet / clause text
+    title: Optional[str] = None
+    section: Optional[str] = None
 
 class NarrativeFromAnomaliesItem(BaseModel):
     event_id: str
@@ -174,6 +176,7 @@ class RuleApplyRequest(BaseModel):
 class RuleApplyResponse(BaseModel):
     status: str
     message: Optional[str] = None
+
 
 
 
