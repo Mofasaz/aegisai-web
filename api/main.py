@@ -558,34 +558,30 @@ def analyze(req: AnalyzeRequest):
             risk_context = d.get("risk_context") if isinstance(d.get("risk_context"), dict) else None,
         ))
 
-    # --- map raw events to UI anomalies ---
-    def _signals_for(e: dict) -> list[str]:
-        sigs = []
-        action = (e.get("action") or "").lower()
-        status = (e.get("status") or "").lower()
-        if status == "failed":
-            sigs.append("failed")
-        if action in {"access_denied", "login"}:
-            sigs.append(action)
-        if action in {"data_delete", "data_export", "data_download"}:
-            sigs.append(action)
-        if action in {"session_timeout", "vpn_connect", "security_scan"}:
-            sigs.append(action)
+    # 7) Map LogEvent → Anomaly (UI-friendly)
+    def _signals_for_event(ev: LogEvent) -> list[str]:
+        sigs: list[str] = []
+        a = (ev.action or "").lower()
+        s = (ev.status or "").lower()
+        if s == "failed": sigs.append("failed")
+        if a in {"access_denied", "login", "logout", "session_timeout"}: sigs.append(a)
+        if a in {"data_delete", "data_download", "data_export", "file_upload", "file_transfer"}: sigs.append(a)
+        if a in {"vpn_connect", "security_scan"}: sigs.append(a)
         return sigs or ["event"]
     
-    def _risk_for(sigs: list[str]) -> int:
-        # quick heuristic: stack risks
+    def _risk_for_signals(sigs: list[str]) -> int:
         base = 30
         if "failed" in sigs: base += 25
         if "access_denied" in sigs: base += 30
-        if "data_delete" in sigs or "data_export" in sigs or "data_download" in sigs: base += 15
+        if any(x in sigs for x in ("data_delete","data_download","data_export")): base += 15
         if "vpn_connect" in sigs: base += 10
+        if "security_scan" in sigs: base += 5
         return max(10, min(95, base))
     
     anomalies: list[Anomaly] = []
     for e in log_events:
-        sigs = _signals_for(e)
-        risk = _risk_for(sigs)
+        sigs = _signals_for_event(ev)
+        risk = _risk_for_signals(sigs)
         # human explain string seen in UI’s “Explain” column
         explain = (
             f"{e.get('user_role', '—')} {e.get('action', '—')} "
@@ -593,7 +589,7 @@ def analyze(req: AnalyzeRequest):
             f"({e.get('status','—')}, {e.get('timestamp','—')})"
         )
         anomalies.append(Anomaly(
-            event_id=str(e.get("event_id") or ""),
+            event_id=e.event_id or "",
             signals=sigs,
             risk_score=risk,
             explain=explain
@@ -697,6 +693,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
