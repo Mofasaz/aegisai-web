@@ -670,9 +670,10 @@ def narrative(req: NarrativeRequest):
         # quick link: use signals + resource as query to find related policy chunks
         q = " ".join(it.signals + [it.event.action or "", it.event.resource or ""]).strip()
         chunks = get_chunks(q, req.items[0].event.role)  # simple proxy; in Azure use grade claim
-        policy_refs = [LinkedPolicy(policy_id=c['policy_id'], clause_id=c['clause_id']) for c in chunks[:3]]
+        policy_refs = [LinkedPolicy(policy_id=c['policy_id'], clause_id=c['clause_id'], clause_text=c["clause_text"], title=c["title"], section=c["section"]) for c in chunks[:3]]
         story = f"{it.event.role} in {it.event.user_dept} performed {it.event.action} on {it.event.resource}. Signals: {', '.join(it.signals)}. Related clauses: " + ", ".join([f"{p.policy_id}/{p.clause_id}" for p in policy_refs])
-        rem = ["Notify line manager", "Quarantine or reverse action if possible", "Schedule policy refresher"]
+        #rem = ["Notify line manager", "Quarantine or reverse action if possible", "Schedule policy refresher"]
+        rem = llm_remediation_from_context(ev, policy_refs)
         items.append(NarrativeItem(event_id=it.event.event_id, narrative=story, remediation=rem, linked_policies=policy_refs))
     return NarrativeResponse(items=items)
 
@@ -713,7 +714,7 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
             chunks = get_chunks_vector(q, ev.user_role or "", top=3, k=20, hybrid=True)
         else:
             chunks = get_chunks(q, ev.user_role or "")[:3]
-        policy_refs = [LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"], clause_text=c["clause_text"]) for c in chunks]
+        policy_refs = [LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"], clause_text=c["clause_text"], title=c["title"], section=c["section"]) for c in chunks]
 
         story = (
             f"{ev.user_role or 'User'} in {ev.location or 'N/A'} performed {ev.action} "
@@ -759,6 +760,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
