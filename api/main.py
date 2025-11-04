@@ -1,4 +1,4 @@
-import os, uuid, json, re, yaml
+import os, uuid, json, re, yaml, logging
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Response, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -28,6 +28,15 @@ except Exception:
 app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
 USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
 RULES_FILE = os.getenv("RULES_FILE", "data/rules.yaml")
+
+logger = logging.getLogger("aegisai.analyze")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    fmt = logging.Formatter("[%(asctime)s] %(levelname)s %(name)s: %(message)s")
+    handler.setFormatter(fmt)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -633,6 +642,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
