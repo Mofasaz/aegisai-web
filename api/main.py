@@ -487,6 +487,12 @@ def analyze(req: AnalyzeRequest):
         [x for x in [(intent.get("search_text") or ""), *intent.get("must_terms", [])] if x]
     ).strip() or None
 
+    # LOG the query we’ll send
+    logger.info(
+        "logs.search start | text=%r | tmin=%s | tmax=%s | filters=%s | not=%s | top=%s | partial=%s",
+        search_text, time_min, time_max, intent.get("filters"), intent.get("not_filters"),
+        req.top, True
+    )
     # You can mix text + filters. For Azure Search:
     #   - use 'search' for text, 'filter' for OData eq on fields like user_role/status
     #   - filter dates with timestamp ge/le in UTC if set
@@ -506,6 +512,13 @@ def analyze(req: AnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}") 
 
+    # LOG a compact summary of what came back
+    logger.info(
+        "logs.search done | count=%d | sample=%s",
+        len(raw_events),
+        json.dumps(raw_events, default=str)
+    )
+    
     # 5) Optional hour-band filtering (inside/non-peak/outside)
     events = raw_events
     if intent.get("inside_hours"):
@@ -642,6 +655,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
