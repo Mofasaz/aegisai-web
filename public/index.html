@@ -518,6 +518,41 @@
         });
       }
 
+      function expandTile(tile) {
+        const body = tile.querySelector('.tile-body');
+        if (!body) return;
+        body.style.maxHeight = body.scrollHeight + "px";
+        body.style.opacity = "1";
+      }
+      
+      function collapseTile(tile) {
+        const body = tile.querySelector('.tile-body');
+        if (!body) return;
+        body.style.maxHeight = "0";
+        body.style.opacity = "0";
+      }
+      
+      // Overwrite focusTile() with smooth expand/collapse
+      function focusTile(name) {
+        ACTIVE = name;
+        document.querySelectorAll('.tile').forEach(t => {
+          const key = t.getAttribute('data-tile');
+          const body = t.querySelector('.tile-body');
+          const isActive = (key === name);
+      
+          if (isActive) {
+            t.classList.add('active');
+            t.classList.remove('collapsed');
+            expandTile(t);
+          } else {
+            t.classList.remove('active');
+            t.classList.add('collapsed');
+            collapseTile(t);
+          }
+        });
+      }
+   
+
       /****************************************************
        *  FETCH HELPER
        ****************************************************/
@@ -559,8 +594,16 @@
 
       function renderAnswer(data) {
         HAS_RESULT = true;
-        el('answer').innerHTML = `<div class="card fade-in">${data.answer || 'No answer provided.'}</div>`;
+        const ans = data.answer || data.output || data.message || "No answer provided.";
+        el('answer').innerHTML = `<div class="card fade-in">${ans}</div>`;
         el('raw').textContent = JSON.stringify(data, null, 2);
+      
+        // expand the Answer tile when data arrives
+        const resultTile = el('tile-result');
+        resultTile.classList.remove('collapsed');
+        expandTile(resultTile);
+      
+        // focus back to Ask to show both Ask & Result context
         focusTile('ask');
       }
 
@@ -804,8 +847,15 @@
       }
       focusTile('ask');
       reanimateTiles();
-
+      document.querySelectorAll('.tile-head').forEach(head => {
+        head.addEventListener('click', () => {
+          const tile = head.closest('.tile');
+          const name = tile.getAttribute('data-tile');
+          focusTile(name);
+        });
+      });
     </script>
   </body>
 </html>
+
 
