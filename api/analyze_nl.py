@@ -137,19 +137,24 @@ def interpret_query(query: Optional[str]) -> Dict[str, Any]:
     }
     q = (query or "").lower()
 
-    # roles
+    # roles (exact phrases first)
+    matched_exact = False
     for phrase, exact in ROLE_EQ.items():
         if phrase in q:
             intent["filters"]["user_role"] = exact
+            matched_exact = True
             break
-        else:
-            # no exact match → look for families that should be keyword-only
-            for fam in ROLE_FAMILY_TERMS:
-                if fam in q:
-                    # use as must-term to hit 'Cargo Supervisor', 'Cargo Manager', 'HR Manager', etc.
-                    intent["must_terms"].append("cargo" if "cargo" in fam else "hr")
-                    # do NOT set filters["user_role"] here
-                    break
+
+    # if no exact match, try role families as lexical must-terms (NOT hard filters)
+    if not matched_exact:
+        for fam in ROLE_FAMILY_TERMS:
+            if fam in q:
+                if "cargo" in fam:
+                    intent["must_terms"].append("cargo")
+                elif "hr" in fam:
+                    intent["must_terms"].append("hr")
+                # don’t set filters["user_role"] here
+                break
 
     # statuses
     if "success" in q and "failed" in q:
