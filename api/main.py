@@ -14,7 +14,7 @@ from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restr
 from retrieval.azure_events_retriever import search_events, _to_dt, get_events_by_ids
 from rules.intent import match_risky_intent
 from api.auth import require_user, UserPrincipal
-from api.analyze_nl import interpret_query, outside_hours_predicate, llm_remediation_from_context
+from api.analyze_nl import interpret_query, outside_hours_predicate
 
 try:
     from integrations.powerbi import push_rows
@@ -36,6 +36,63 @@ if not logger.handlers:
     handler.setFormatter(fmt)
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
+
+from openai import AzureOpenAI
+
+def llm_remediation_from_context(ev: "LogEvent", policy_refs: list[LinkedPolicy]) -> list[str]:
+    texts = []
+    for p in policy_refs:
+        if p.citation:
+            label = f"[{p.policy_id}/{p.clause_id}]"
+            title = f" — {p.title}" if p.title else ""
+            section = f" — {p.section}" if p.section else ""
+            texts.append(f"{label}{title}{section}\n{p.citation}")
+
+    if not texts:
+        # Fallback if we have no text to compare
+        return ["Notify line manager", "Reverse/quarantine action if possible", "Schedule policy refresher"]
+
+    context = "\n\n---\n\n".join(texts)
+    ev_line = (
+        f"Role={ev.user_role or 'N/A'} | System={ev.system or 'N/A'} | "
+        f"Action={ev.action or 'N/A'} | Status={ev.status or 'N/A'} | "
+        f"Location={ev.location or 'N/A'} | Time={ev.timestamp or 'N/A'}"
+    )
+
+    prompt = f"""
+You are a compliance assistant. Compare the event against the policy citations and produce 3–5 specific, actionable remediation steps.
+
+Event:
+{ev_line}
+
+Policy citations:
+{context}
+
+Rules:
+- Be concrete (who does what, where, within what time).
+- Reference the relevant clause IDs only when helpful (short code like [P1/C3]).
+- Prefer reversible / low-risk steps first, then escalations.
+- Output plain bullet lines, no numbering, no extra commentary.
+"""
+
+    try:
+        client = AzureOpenAI(
+            azure_endpoint=AOAI_ENDPOINT,
+            api_key=AOAI_KEY,
+            api_version=AOAI_API_VERSION
+        )
+        resp = client.chat.completions.create(
+            model=GPT_DEPLOYMENT,  # your deployment name
+            messages=[{"role":"user","content":prompt}],
+            temperature=0.1
+        )
+        txt = resp.choices[0].message.content.strip()
+        # Split into bullets safely
+        lines = [l.strip(" -*\u2022").strip() for l in txt.splitlines() if l.strip()]
+        return [l for l in lines if l]
+    except Exception:
+        # safe fallback
+        return ["Notify line manager", "Reverse/quarantine action if possible", "Schedule targeted policy refresher"]
 
 
 @app.exception_handler(RequestValidationError)
@@ -701,6 +758,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
