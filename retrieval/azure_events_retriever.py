@@ -62,6 +62,9 @@ def _mk_lex_query(base_text: str | None,
     used_full = (q != "*")
     return q, used_full
 
+def _coerce_ts(v):
+    return _to_dt(v)
+
 
 def _to_dt(v):
     if isinstance(v, datetime):
@@ -274,7 +277,7 @@ def search_events(
         for r in results:
             out.append({
                 "event_id":  _sel(r, "event_id"),
-                "timestamp": _sel(r, "timestamp"),
+                "timestamp": _coerce_ts(_sel(r, "timestamp")),
                 "action":    _sel(r, "action"),
                 "status":    _sel(r, "status"),
                 "user_role": _sel(r, "user_role"),
