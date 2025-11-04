@@ -467,6 +467,11 @@ def analyze(req: AnalyzeRequest):
     time_min = req.time_min or intent.get("time_min")
     time_max = req.time_max or intent.get("time_max")
 
+    # If the user left everything empty, default to last 30 days
+    if not req.query and not time_min and not time_max:
+        time_max = datetime.now(timezone.utc)
+        time_min = time_max - timedelta(days=30)
+
     # Step 3: build search args
     search_text = " ".join(
         [x for x in [(intent.get("search_text") or ""), *intent.get("must_terms", [])] if x]
@@ -627,6 +632,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
