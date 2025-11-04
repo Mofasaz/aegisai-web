@@ -239,6 +239,7 @@ def search_events(
     filters: Optional[Dict[str, Any]] = None,
     not_filters: Optional[Dict[str, Any]] = None,
     relax: bool = True,
+    partial: bool = True,   # NEW: default to partial token matching
 ) -> List[dict]:
     """
     Hybrid search with progressive relaxation so partials/fuzzy still return results.
@@ -261,15 +262,18 @@ def search_events(
     def _run(search_text: str | None,
              odata: str | None,
              qtype: str,
-             mode: str) -> list[dict]:
+             mode: str,
+             search_fields: List[str]) -> list[dict]:
+        # If search_text collapses to "*", use query_type="simple" to avoid Lucene parse surprises
+        qtype_eff = "simple" if (not search_text or search_text.strip() == "*") else qtype
         results = _client.search(
             search_text=search_text,
             filter=odata,
             top=top,
             order_by=["timestamp desc"],
             select=["event_id","timestamp","action","status","user_role","system","location","title","log_summary"],
-            query_type=qtype,                 # 'simple' or 'full'
-            search_mode=mode,                 # 'any' so partial token hits count
+            query_type=qtype_eff,                 # 'simple' or 'full'
+            search_mode=("any" if partial else "all"),  # 'any' so partial token hits count
             search_fields=SEARCH_FIELDS,
             vector_queries=vector_queries,
         )
@@ -277,7 +281,7 @@ def search_events(
         for r in results:
             out.append({
                 "event_id":  _sel(r, "event_id"),
-                "timestamp": _coerce_ts(_sel(r, "timestamp")),
+                "timestamp": _sel(r, "timestamp"),
                 "action":    _sel(r, "action"),
                 "status":    _sel(r, "status"),
                 "user_role": _sel(r, "user_role"),
@@ -291,13 +295,13 @@ def search_events(
     # Pass 1: strict lexical, strict OData
     odata1 = _build_filter_odata(time_min, time_max, filters, not_filters)
     q1, used_full1 = _mk_lex_query(query, None, fuzzy=False, wildcards=False)
-    rows = _run(q1, odata1, qtype=("full" if used_full1 else "simple"), mode="any")
+    rows = _run(q1, odata1, qtype=("full" if used_full1 else "simple"), mode=("any" if partial else "all"), search_fields=SEARCH_FIELDS)
     if rows or not relax:
         return rows
 
     # Pass 2: fuzzy + wildcard, same OData
     q2, used_full2 = _mk_lex_query(query, None, fuzzy=True, wildcards=True)
-    rows = _run(q2, odata1, qtype=("full" if used_full2 else "simple"), mode="any")
+    rows = _run(q2, odata1, qtype=("full" if used_full2 else "simple"), mode=("any" if partial else "all"), search_fields=SEARCH_FIELDS)
     if rows:
         return rows
 
@@ -305,7 +309,7 @@ def search_events(
     # Keep ONLY time window hard-filtered (and NOT filters still active here)
     odata3 = _build_filter_odata(time_min, time_max, filters=None, not_filters=not_filters)
     q3, used_full3 = _mk_lex_query(query, (filters or {}), fuzzy=True, wildcards=True)
-    rows = _run(q3, odata3, qtype=("full" if used_full3 else "simple"), mode="any")
+    rows = _run(q3, odata3, qtype=("full" if used_full3 else "simple"), mode=("any" if partial else "all"), search_fields=SEARCH_FIELDS)
     if rows:
         return rows
 
@@ -315,11 +319,11 @@ def search_events(
         tmin_wide = _to_dt(time_min) - timedelta(days=7) if time_min else None
         tmax_wide = _to_dt(time_max)
         odata4 = _build_filter_odata(tmin_wide, tmax_wide, filters=None, not_filters=not_filters)
-        rows = _run(q3, odata4, qtype=("full" if used_full3 else "simple"), mode="any")
+        rows = _run(q3, odata4, qtype=("full" if used_full3 else "simple"), mode=("any" if partial else "all"), search_fields=SEARCH_FIELDS)
         if rows:
             return rows
 
     # Pass 5: last resort—drop NOT filters as well
     odata5 = _build_filter_odata(time_min, time_max, filters=None, not_filters=None)
-    rows = _run(q3, odata5, qtype=("full" if used_full3 else "simple"), mode="any")
+    rows = _run(q3, odata5, qtype=("full" if used_full3 else "simple"), mode=("any" if partial else "all"), search_fields=SEARCH_FIELDS)
     return rows
