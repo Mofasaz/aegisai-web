@@ -270,15 +270,15 @@ def search_events(
              mode: str,
              search_fields: List[str]) -> list[dict]:
         # If search_text collapses to "*", use query_type="simple" to avoid Lucene parse surprises
-        qtype_eff = "simple" if (not search_text or search_text.strip() == "*") else qtype
+        qtype_eff = "simple" if ((not search_text or search_text.strip() == "*") and qtype == "full") else qtype
         results = _client.search(
-            search_text=search_text,
+            search_text=search_text or "*",
             filter=odata,
             top=top,
             order_by=["timestamp desc"],
             select=["event_id","timestamp","action","status","user_role","system","location","title","log_summary"],
             query_type=qtype_eff,                 # 'simple' or 'full'
-            search_mode=("any" if partial else "all"),  # 'any' so partial token hits count
+            search_mode=mode,  # 'any' so partial token hits count
             search_fields=SEARCH_FIELDS,
             vector_queries=vector_queries,
         )
