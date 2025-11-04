@@ -441,6 +441,7 @@ def analyze(req: AnalyzeRequest):
     - If req.events has items: analyze those (your current flow).
     - Else: pull events from Azure AI Search logs index (aegisai-logs-indx), then analyze.
     """
+    now_utc = datetime.now(timezone.utc)
     # Mode A: direct events (paste-in) – optional
     if req.events:
         events = [
@@ -632,6 +633,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
