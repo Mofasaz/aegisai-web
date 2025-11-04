@@ -672,8 +672,7 @@ def narrative(req: NarrativeRequest):
         chunks = get_chunks(q, req.items[0].event.role)  # simple proxy; in Azure use grade claim
         policy_refs = [LinkedPolicy(policy_id=c['policy_id'], clause_id=c['clause_id'], clause_text=c["clause_text"], title=c["title"], section=c["section"]) for c in chunks[:3]]
         story = f"{it.event.role} in {it.event.user_dept} performed {it.event.action} on {it.event.resource}. Signals: {', '.join(it.signals)}. Related clauses: " + ", ".join([f"{p.policy_id}/{p.clause_id}" for p in policy_refs])
-        #rem = ["Notify line manager", "Quarantine or reverse action if possible", "Schedule policy refresher"]
-        rem = llm_remediation_from_context(ev, policy_refs)
+        rem = ["Notify line manager", "Quarantine or reverse action if possible", "Schedule policy refresher"]
         items.append(NarrativeItem(event_id=it.event.event_id, narrative=story, remediation=rem, linked_policies=policy_refs))
     return NarrativeResponse(items=items)
 
@@ -760,6 +759,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
