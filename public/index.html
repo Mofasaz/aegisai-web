@@ -763,6 +763,8 @@
           (data.items || []).forEach(n => {
             const li = document.createElement('li');
             const pol = (n.linked_policies||[]).map(p => `<code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code>`).join(' ');
+            const cite = p.clause_text ? `<div class="small" style="margin-top:4px;opacity:.85;">“${sanitize(p.clause_text)}”</div>` : "";
+    return `<div style="margin:6px 0;">${head}${cite}</div>`;
             const rem = (n.remediation||[]).map(r => `<li>${sanitize(r)}</li>`).join('');
             li.innerHTML = `
               <div class="card">
@@ -790,4 +792,5 @@
     </script>
   </body>
 </html>
+
 
