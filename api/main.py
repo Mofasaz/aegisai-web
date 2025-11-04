@@ -492,29 +492,19 @@ def analyze(req: AnalyzeRequest):
     # 5) Optional hour-band filtering (inside/non-peak/outside)
     events = raw_events
 
-    inside = intent.get("inside_hours")
-    outside = intent.get("outside_hours")
-    
-    if inside or outside:
+    if intent.get("inside_hours") or intent.get("outside_hours"):
+        band = intent.get("inside_hours") or intent.get("outside_hours")
+        sh, eh = band
         filtered = []
         for ev in events:
-            ts = _to_dt(ev.get("timestamp"))
-            # If we cannot parse ts, keep the event (don’t drop data blindly).
+            ts = ev.get("timestamp")
+            # be forgiving: accept both datetime and string
+            if not isinstance(ts, datetime):
+                ts = _to_dt(ts)
             if not ts:
-                filtered.append(ev)
                 continue
-    
-            if inside:
-                sh, eh = inside
-                keep = not outside_hours_predicate(ts, sh, eh)
-            else:  # outside
-                sh, eh = outside
-                keep = outside_hours_predicate(ts, sh, eh)
-    
+            keep = (not outside_hours_predicate(ts, sh, eh)) if intent.get("inside_hours") else outside_hours_predicate(ts, sh, eh)
             if keep:
-                # Optionally carry the parsed dt forward so we don’t reparse later
-                ev = dict(ev)
-                ev["timestamp"] = ts
                 filtered.append(ev)
         events = filtered
 
@@ -635,6 +625,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
