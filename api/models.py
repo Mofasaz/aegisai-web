@@ -108,7 +108,7 @@ class NarrativeRequestItem(BaseModel):
 class LinkedPolicy(BaseModel):
     policy_id: str
     clause_id: str
-    citation: Optional[str] = None      # ← short snippet / clause text
+    clause_text: Optional[str] = None      # ← short snippet / clause text
 
 class NarrativeFromAnomaliesItem(BaseModel):
     event_id: str
@@ -174,6 +174,7 @@ class RuleApplyRequest(BaseModel):
 class RuleApplyResponse(BaseModel):
     status: str
     message: Optional[str] = None
+
 
 
 
