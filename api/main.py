@@ -485,6 +485,8 @@ def analyze(req: AnalyzeRequest):
             top=req.top,
             filters=intent.get("filters") or {},
             not_filters=intent.get("not_filters") or {},
+            relax=True,       # keep progressive widening
+            partial=True,     # allow partial token hits (search_mode="any")
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Logs search failed: {type(e).__name__}: {e}") 
@@ -492,21 +494,22 @@ def analyze(req: AnalyzeRequest):
     # 5) Optional hour-band filtering (inside/non-peak/outside)
     events = raw_events
 
-    if intent.get("inside_hours") or intent.get("outside_hours"):
-        band = intent.get("inside_hours") or intent.get("outside_hours")
-        sh, eh = band
-        filtered = []
+   if intent.get("inside_hours"):
+        sh, eh = intent["inside_hours"]
+        events = []
+        for ev in raw_events:
+            ts = _to_dt(ev.get("timestamp"))
+            if ts and not outside_hours_predicate(ts, sh, eh):
+                events.append(ev)
+
+    if intent.get("outside_hours"):
+        sh, eh = intent["outside_hours"]
+        filt = []
         for ev in events:
-            ts = ev.get("timestamp")
-            # be forgiving: accept both datetime and string
-            if not isinstance(ts, datetime):
-                ts = _to_dt(ts)
-            if not ts:
-                continue
-            keep = (not outside_hours_predicate(ts, sh, eh)) if intent.get("inside_hours") else outside_hours_predicate(ts, sh, eh)
-            if keep:
-                filtered.append(ev)
-        events = filtered
+            ts = _to_dt(ev.get("timestamp"))
+            if ts and outside_hours_predicate(ts, sh, eh):
+                filt.append(ev)
+        events = filt
 
 
     # 6) Map result → LogEvent (engine-friendly)
@@ -625,6 +628,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
