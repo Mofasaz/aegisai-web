@@ -94,7 +94,10 @@ Rules:
         # Split into bullets safely
         lines = [l.strip(" -*\u2022").strip() for l in txt.splitlines() if l.strip()]
         return [l for l in lines if l]
-    except Exception:
+    except Exception as e:
+        logger.info(
+                f"llm_remediation_from_context failed | error={e}"
+            )
         # safe fallback
         return ["Notify line manager", "Reverse/quarantine action if possible", "Schedule targeted policy refresher"]
 
@@ -762,6 +765,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
