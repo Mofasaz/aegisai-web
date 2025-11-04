@@ -14,7 +14,7 @@ from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restr
 from retrieval.azure_events_retriever import search_events, _to_dt, get_events_by_ids
 from rules.intent import match_risky_intent
 from api.auth import require_user, UserPrincipal
-from api.analyze_nl import interpret_query, outside_hours_predicate
+from api.analyze_nl import interpret_query, outside_hours_predicate, llm_remediation_from_context
 
 try:
     from integrations.powerbi import push_rows
@@ -655,15 +655,17 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
             chunks = get_chunks_vector(q, ev.user_role or "", top=3, k=20, hybrid=True)
         else:
             chunks = get_chunks(q, ev.user_role or "")[:3]
-        policy_refs = [LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"]) for c in chunks]
+        policy_refs = [LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"], citation=c["citation"]) for c in chunks]
 
         story = (
             f"{ev.user_role or 'User'} in {ev.location or 'N/A'} performed {ev.action} "
             f"on {ev.system or 'system'}. Signals: {', '.join(it.signals)}. "
             f"Linked policies: " + ", ".join([f"{p.policy_id}/{p.clause_id}" for p in policy_refs]) if policy_refs else "Linked policies: none."
         )
-        rem = ["Notify line manager", "Quarantine/reverse if possible", "Schedule targeted policy refresher"]
-
+        #rem = ["Notify line manager", "Quarantine/reverse if possible", "Schedule targeted policy refresher"]
+        # ——— LLM remediation grounded in citations ———
+        rem = llm_remediation_from_context(ev, policy_refs)
+        
         items.append(NarrativeItem(
             event_id=ev.event_id, narrative=story, remediation=rem, linked_policies=policy_refs
         ))
@@ -699,6 +701,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
