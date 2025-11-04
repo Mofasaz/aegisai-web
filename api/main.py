@@ -48,7 +48,10 @@ def llm_remediation_from_context(ev: "LogEvent", policy_refs: list[LinkedPolicy]
             title = f" — {p.title}" if p.title else ""
             section = f" — {p.section}" if p.section else ""
             texts.append(f"{label}{title}{section}\n{p.clause_text}")
-
+            logger.info(
+                "logs.search done | clause_text=%r",
+                p.clause_text
+            )
     if not texts:
         # Fallback if we have no text to compare
         return ["Notify line manager", "Reverse/quarantine action if possible", "Schedule policy refresher"]
@@ -759,6 +762,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
