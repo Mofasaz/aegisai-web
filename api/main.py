@@ -77,9 +77,9 @@ Rules:
 
     try:
         client = AzureOpenAI(
-            azure_endpoint=AOAI_ENDPOINT,
-            api_key=AOAI_KEY,
-            api_version=AOAI_API_VERSION
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         )
         resp = client.chat.completions.create(
             model=GPT_DEPLOYMENT,  # your deployment name
@@ -758,6 +758,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
