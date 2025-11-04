@@ -30,12 +30,6 @@ def _mk_lex_query(base_text: str | None,
                   facet_terms: dict[str, str] | None,
                   fuzzy: bool,
                   wildcards: bool) -> tuple[str, bool]:
-    """
-    Build a robust lexical query string for Azure Search (query_type='full').
-    Adds fuzzy (~2) and/or prefix wildcard (*) to each token ≥3 chars.
-    Also injects facet values as soft terms so partials can still match.
-    Returns (query_text, used_full) where used_full tells you to set query_type='full'.
-    """
     toks: list[str] = []
 
     def _explode(s: str):
@@ -51,7 +45,7 @@ def _mk_lex_query(base_text: str | None,
         else:
             toks.append(t)
 
-    # 2) soft-inject facet values to help recall (not as hard filters)
+    # 2) soft-inject facet values
     for _, v in (facet_terms or {}).items():
         for t in _explode(str(v)):
             if len(t) >= 3:
@@ -62,9 +56,12 @@ def _mk_lex_query(base_text: str | None,
             else:
                 toks.append(t)
 
-    # Ensure we don’t end up with an empty string
-    q = " ".join(dict.fromkeys(toks)) or "*"   # dedupe while preserving order
-    return q, True   # we used full Lucene query
+    q = " ".join(dict.fromkeys(toks)).strip() or "*"
+
+    # IMPORTANT: if the query collapses to "*", prefer simple query_type.
+    used_full = (q != "*")
+    return q, used_full
+
 
 def _to_dt(v):
     if isinstance(v, datetime):
@@ -98,7 +95,7 @@ def get_events_by_ids(ids: List[str]) -> List[Dict[str, Any]]:
     try:
         for eid in ids:
             try:
-                d = _evt_client.get_document(key=eid)
+                d = _client.get_document(key=eid)
                 out.append({
                     "event_id": d.get("event_id"),
                     "timestamp": d.get("timestamp"),
@@ -125,7 +122,7 @@ def get_events_by_ids(ids: List[str]) -> List[Dict[str, Any]]:
         parts = ["event_id eq '{}'".format(x.replace("'", "''")) for x in batch]
         flt = " or ".join(parts)
     
-        results = _evt_client.search(
+        results = _client.search(
             search_text="*",
             filter=flt,
             query_type="simple",
