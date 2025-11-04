@@ -11,7 +11,7 @@ from api.models import *
 from api.chains import get_llm
 from rules.engine import analyze_events, load_rules_from_file, set_rules, get_rules
 from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restricted_hits
-from retrieval.azure_events_retriever import search_events, _to_dt
+from retrieval.azure_events_retriever import search_events, _to_dt, get_events_by_ids
 from rules.intent import match_risky_intent
 from api.auth import require_user, UserPrincipal
 from api.analyze_nl import interpret_query, outside_hours_predicate
@@ -699,6 +699,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
