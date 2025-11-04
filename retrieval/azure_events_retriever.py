@@ -231,13 +231,14 @@ def _vector_query(q: str) -> Tuple[Optional[dict], Optional[str]]:
 
 # --- Main search ---
 def search_events(
-    *,
     query: Optional[str],
     time_min: Optional[datetime],
     time_max: Optional[datetime],
+    *,
     top: int = 50,
     filters: Optional[Dict[str, Any]] = None,
     not_filters: Optional[Dict[str, Any]] = None,
+    relax: bool = True,
 ) -> List[dict]:
     """
     Hybrid search with progressive relaxation so partials/fuzzy still return results.
