@@ -763,13 +763,14 @@
           (data.items || []).forEach(n => {
             const li = document.createElement('li');
             //const pol = (n.linked_policies||[]).map(p => `<code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code>`).join(' ');
-            const pol = (n.linked_policies||[]).map(p => {
-              const chip = `<code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code>`;
-              const meta = [p.title ? sanitize(p.title) : null, p.section ? sanitize(p.section) : null].filter(Boolean).join(" — ");
-              const head = meta ? `${chip} <span class="small">— ${meta}</span>` : chip;
-              const cite = p.citation ? `<div class="small" style="margin-top:4px;opacity:.85;">“${sanitize(p.citation)}”</div>` : "";
-              return `<div style="margin:6px 0;">${head}${cite}</div>`;
-            }).join(' ');
+            const pol = (n.linked_policies||[]).map(p => `
+              <details style="margin-top:6px;">
+                <summary><code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code> ${sanitize(p.title || '')}</summary>
+                <div class="small" style="margin-top:6px; opacity:.9;">
+                  ${sanitize(p.clause_text || '—')}
+                </div>
+              </details>
+            `).join(' ');
             const rem = (n.remediation||[]).map(r => `<li>${sanitize(r)}</li>`).join('');
             li.innerHTML = `
               <div class="card">
