@@ -24,6 +24,47 @@ _client = SearchClient(
     credential=AzureKeyCredential(EVENTS_KEY),
 )
 
+SEARCH_FIELDS = ["action","user_role","system","location","status","title","log_summary"]
+
+def _mk_lex_query(base_text: str | None,
+                  facet_terms: dict[str, str] | None,
+                  fuzzy: bool,
+                  wildcards: bool) -> tuple[str, bool]:
+    """
+    Build a robust lexical query string for Azure Search (query_type='full').
+    Adds fuzzy (~2) and/or prefix wildcard (*) to each token ≥3 chars.
+    Also injects facet values as soft terms so partials can still match.
+    Returns (query_text, used_full) where used_full tells you to set query_type='full'.
+    """
+    toks: list[str] = []
+
+    def _explode(s: str):
+        return [t for t in (s or "").replace("/", " ").replace("_", " ").split() if t]
+
+    # 1) from user text
+    for t in _explode(base_text or ""):
+        if len(t) >= 3:
+            piece = t
+            if wildcards: piece = f"{piece}*"
+            if fuzzy:     piece = f"{piece}~2"
+            toks.append(piece)
+        else:
+            toks.append(t)
+
+    # 2) soft-inject facet values to help recall (not as hard filters)
+    for _, v in (facet_terms or {}).items():
+        for t in _explode(str(v)):
+            if len(t) >= 3:
+                piece = t
+                if wildcards: piece = f"{piece}*"
+                if fuzzy:     piece = f"{piece}~2"
+                toks.append(piece)
+            else:
+                toks.append(t)
+
+    # Ensure we don’t end up with an empty string
+    q = " ".join(dict.fromkeys(toks)) or "*"   # dedupe while preserving order
+    return q, True   # we used full Lucene query
 
 def _to_dt(v):
     if isinstance(v, datetime):
@@ -199,65 +240,85 @@ def search_events(
     not_filters: Optional[Dict[str, Any]] = None,
 ) -> List[dict]:
     """
-    Hybrid search over aegisai-logs-indx:
-      - Keyword (search_text) over searchable fields
-      - Optional vectorQueries over log_vector when USE_EVENTS_VECTOR = True
-
-    Accepts NL-derived filters:
-      filters     -> { field: value }   -> field eq 'value'
-      not_filters -> { field: value }   -> not (field eq 'value')
-
-    time_min/time_max may be str ISO8601 or datetime (UTC assumed if naive).
+    Hybrid search with progressive relaxation so partials/fuzzy still return results.
+    Passes:
+      1) strict: hard OData filters + plain lexical (no fuzzy/wildcards)
+      2) fuzzy:  same filters + fuzzy + wildcard on lexical
+      3) soft facets: drop equals-filters from OData, push them as lexical soft terms
+      4) widen time: extend window (e.g., -7 days) if still empty
+      5) drop NOT filters last resort
+    Always includes vector query if available.
     """
-    # Build OData filter
-    odata_filter = _build_filter_odata(time_min, time_max, filters, not_filters)
-
-    select_fields = [
-        "event_id", "timestamp", "action", "status",
-        "user_role", "system", "location",
-        # "user_dept","resource","target","source_ip","auth","risk_context"
-        # You also have: title, id, log_summary, AzureSearch_DocumentKey; fetch if needed.
-    ]
-
-    # Hybrid strategy:
-    # - If vector enabled and we have a query → include vectorQueries + search_text (empty or query)
-    # - Else fall back to keyword search over indexed searchable fields (action, user_role, system, location, title, status, log_summary)
+    # Build vector
     vector_queries = None
     if USE_EVENTS_VECTOR and (query or "").strip():
         vq, _ = _vector_query(query or "")
         if vq:
             vector_queries = [vq]
 
-    # IMPORTANT: when using vector-only in Azure Search, set search_text=None;
-    # for hybrid, you can pass a lightweight search_text to combine (requires service version that supports hybrid).
-    search_text = (query or "*") if not vector_queries else None
-    
-    results = _client.search(
-        search_text=search_text,
-        filter=odata_filter,
-        top=top,
-        select=select_fields,
-        query_type="simple",
-        vector_queries=vector_queries,
-    )
+    # Runner
+    def _run(search_text: str | None,
+             odata: str | None,
+             qtype: str,
+             mode: str) -> list[dict]:
+        results = _client.search(
+            search_text=search_text,
+            filter=odata,
+            top=top,
+            order_by=["timestamp desc"],
+            select=["event_id","timestamp","action","status","user_role","system","location","title","log_summary"],
+            query_type=qtype,                 # 'simple' or 'full'
+            search_mode=mode,                 # 'any' so partial token hits count
+            search_fields=",".join(SEARCH_FIELDS),
+            vector_queries=vector_queries,
+        )
+        out = []
+        for r in results:
+            out.append({
+                "event_id":  _sel(r, "event_id"),
+                "timestamp": _sel(r, "timestamp"),
+                "action":    _sel(r, "action"),
+                "status":    _sel(r, "status"),
+                "user_role": _sel(r, "user_role"),
+                "system":    _sel(r, "system"),
+                "location":  _sel(r, "location"),
+                "title":     _sel(r, "title"),
+                "log_summary": _sel(r, "log_summary"),
+            })
+        return out
 
-    out: List[dict] = []
-    for r in results:
-        out.append({
-            "event_id":  _sel(r, "event_id"),
-            "timestamp": _sel(r, "timestamp"),  # prefer datetime for downstream hour-band logic,
-            "action":    _sel(r, "action"),
-            "status":    _sel(r, "status"),
-            "user_role": _sel(r, "user_role"),
-            "system":    _sel(r, "system"),
-            "location":  _sel(r, "location"),
-            # risk_context not present in your index—left out intentionally
-            # Include these only if you added to select_fields + index schema:
-            # "user_dept": _sel(r, "user_dept"),
-            # "resource":  _sel(r, "resource"),
-            # "target":    _sel(r, "target"),
-            # "source_ip": _sel(r, "source_ip"),
-            # "auth":      _sel(r, "auth"),
-            # "risk_context": _sel(r, "risk_context"),
-        })
-    return out
+    # Pass 1: strict lexical, strict OData
+    odata1 = _build_filter_odata(time_min, time_max, filters, not_filters)
+    q1, used_full1 = _mk_lex_query(query, None, fuzzy=False, wildcards=False)
+    rows = _run(q1, odata1, qtype=("full" if used_full1 else "simple"), mode="any")
+    if rows or not relax:
+        return rows
+
+    # Pass 2: fuzzy + wildcard, same OData
+    q2, used_full2 = _mk_lex_query(query, None, fuzzy=True, wildcards=True)
+    rows = _run(q2, odata1, qtype=("full" if used_full2 else "simple"), mode="any")
+    if rows:
+        return rows
+
+    # Pass 3: soft facets — drop equals filters from OData and inject as lexical
+    # Keep ONLY time window hard-filtered (and NOT filters still active here)
+    odata3 = _build_filter_odata(time_min, time_max, filters=None, not_filters=not_filters)
+    q3, used_full3 = _mk_lex_query(query, (filters or {}), fuzzy=True, wildcards=True)
+    rows = _run(q3, odata3, qtype=("full" if used_full3 else "simple"), mode="any")
+    if rows:
+        return rows
+
+    # Pass 4: widen time window (go 7 days back) + soft facets
+    if time_min or time_max:
+        from datetime import timedelta
+        tmin_wide = _to_dt(time_min) - timedelta(days=7) if time_min else None
+        tmax_wide = _to_dt(time_max)
+        odata4 = _build_filter_odata(tmin_wide, tmax_wide, filters=None, not_filters=not_filters)
+        rows = _run(q3, odata4, qtype=("full" if used_full3 else "simple"), mode="any")
+        if rows:
+            return rows
+
+    # Pass 5: last resort—drop NOT filters as well
+    odata5 = _build_filter_odata(time_min, time_max, filters=None, not_filters=None)
+    rows = _run(q3, odata5, qtype=("full" if used_full3 else "simple"), mode="any")
+    return rows
