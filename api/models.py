@@ -89,7 +89,7 @@ class AnalyzeRequest(BaseModel):
     time_min: Optional[datetime] = None
     time_max: Optional[datetime] = None
     top: conint(gt=0, le=500) = 50
-    events: Optional[List[LogEvent]] = None
+    events: list[LogEvent] = Field(default_factory=list)
     # accept strings for time_min/time_max
     @validator("time_min", pre=True)
     def _vm(cls, v): return _parse_dt(v)
@@ -173,6 +173,7 @@ class RuleApplyRequest(BaseModel):
 class RuleApplyResponse(BaseModel):
     status: str
     message: Optional[str] = None
+
 
 
 
