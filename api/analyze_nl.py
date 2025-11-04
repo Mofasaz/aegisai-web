@@ -20,8 +20,8 @@ _OUTSIDE_HOURS_RE = re.compile(
     re.I
 )
 
-ROLE_EQ = {"cabin crew": "Cabin Crew", "ground staff": "Ground Staff", "pilot": "Pilot", "it admin": "IT Admin"}
-ROLE_FAMILY_TERMS = {"cargo", "hr", "hr personnel", "hr managers", "hr manager", "hr coordinator"}
+ROLE_EQ = {"cabin crew": "Cabin Crew", "ground staff": "Ground Staff", "pilot": "Pilot", "it admin": "IT Admin", "security analyst": "Security Analyst", "cargo s    upervisor": "Cargo Supervisor", "maintenance engineer": "Maintenance Engineer"}
+ROLE_FAMILY_TERMS = {"cargo", "hr", "hr personnel", "hr managers", "hr manager", "hr coordinator", "maintenance engineer", "pilot", "security analyst", "it admin", "ground staff", "manager", "supervisor"}
 
 
 ACTION_HINTS = {
@@ -149,10 +149,7 @@ def interpret_query(query: Optional[str]) -> Dict[str, Any]:
     if not matched_exact:
         for fam in ROLE_FAMILY_TERMS:
             if fam in q:
-                if "cargo" in fam:
-                    intent["must_terms"].append("cargo")
-                elif "hr" in fam:
-                    intent["must_terms"].append("hr")
+                intent["must_terms"].append(fam)
                 # don’t set filters["user_role"] here
                 break
 
