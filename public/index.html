@@ -763,7 +763,7 @@
           (data.items || []).forEach(n => {
             const li = document.createElement('li');
             //const pol = (n.linked_policies||[]).map(p => `<code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code>`).join(' ');
-            const pol = (n.linked_policies||[]).map p => {
+            const pol = (n.linked_policies||[]).map(p => {
               const chip = `<code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code>`;
               const meta = [p.title ? sanitize(p.title) : null, p.section ? sanitize(p.section) : null].filter(Boolean).join(" — ");
               const head = meta ? `${chip} <span class="small">— ${meta}</span>` : chip;
@@ -797,5 +797,6 @@
     </script>
   </body>
 </html>
+
 
 
