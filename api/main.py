@@ -580,7 +580,7 @@ def analyze(req: AnalyzeRequest):
     
     anomalies: list[Anomaly] = []
     for e in log_events:
-        sigs = _signals_for_event(ev)
+        sigs = _signals_for_event(e)
         risk = _risk_for_signals(sigs)
         # human explain string seen in UI’s “Explain” column
         explain = (
@@ -693,6 +693,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
