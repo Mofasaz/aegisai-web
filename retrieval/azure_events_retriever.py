@@ -35,7 +35,7 @@ def _mk_lex_query(base_text: str | None,
     def _explode(s: str):
         return [t for t in (s or "").replace("/", " ").replace("_", " ").split() if t]
 
-    # 1) from user text
+    # user text
     for t in _explode(base_text or ""):
         if len(t) >= 3:
             piece = t
@@ -45,7 +45,7 @@ def _mk_lex_query(base_text: str | None,
         else:
             toks.append(t)
 
-    # 2) soft-inject facet values
+    # soft facets
     for _, v in (facet_terms or {}).items():
         for t in _explode(str(v)):
             if len(t) >= 3:
@@ -56,11 +56,16 @@ def _mk_lex_query(base_text: str | None,
             else:
                 toks.append(t)
 
-    q = " ".join(dict.fromkeys(toks)).strip() or "*"
+    # dedupe while preserving order
+    toks = list(dict.fromkeys(toks))
+    if not toks:
+        # IMPORTANT: empty → use "*" with SIMPLE syntax
+        return "*", False   # used_full = False
 
-    # IMPORTANT: if the query collapses to "*", prefer simple query_type.
-    used_full = (q != "*")
-    return q, used_full
+    # If we introduced Lucene operators (* or ~), we should use 'full'
+    used_full = any(("*" in t) or ("~" in t) for t in toks)
+    return " ".join(toks), used_full
+
 
 def _coerce_ts(v):
     return _to_dt(v)
