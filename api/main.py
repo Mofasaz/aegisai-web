@@ -521,6 +521,7 @@ def analyze(req: AnalyzeRequest):
     
     # 5) Optional hour-band filtering (inside/non-peak/outside)
     events = raw_events
+    """
     if intent.get("inside_hours"):
         sh, eh = intent["inside_hours"]
         events = []
@@ -537,7 +538,7 @@ def analyze(req: AnalyzeRequest):
             if ts and outside_hours_predicate(ts, sh, eh):
                 filt.append(ev)
         events = filt
-
+    """
 
     # 6) Map result → LogEvent (engine-friendly)
     log_events: List[LogEvent] = []
@@ -655,6 +656,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
