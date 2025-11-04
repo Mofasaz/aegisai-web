@@ -577,6 +577,12 @@ def analyze(req: AnalyzeRequest):
         if "vpn_connect" in sigs: base += 10
         if "security_scan" in sigs: base += 5
         return max(10, min(95, base))
+
+    def getf(obj, key, default=None):
+        """dict-safe / pydantic-safe getter."""
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
     
     anomalies: list[Anomaly] = []
     for e in log_events:
@@ -584,9 +590,9 @@ def analyze(req: AnalyzeRequest):
         risk = _risk_for_signals(sigs)
         # human explain string seen in UI’s “Explain” column
         explain = (
-            f"{e.get('user_role', '—')} {e.get('action', '—')} "
-            f"on {e.get('system', '—')} @ {e.get('location', '—')} "
-            f"({e.get('status','—')}, {e.get('timestamp','—')})"
+            f"{e.user_role or '—'} {e.action or '—'} "
+            f"on {e.system or '—'} @ {e.location or '—'} "
+            f"({e.status or '—'}, {e.timestamp or '—'})"
         )
         anomalies.append(Anomaly(
             event_id=e.event_id or "",
@@ -693,6 +699,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
