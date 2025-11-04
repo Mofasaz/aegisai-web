@@ -86,7 +86,7 @@ Rules:
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         )
         resp = client.chat.completions.create(
-            model=os.getenv("AZURE_OPENAI_EMBED_DEPLOYMENT"),  # your deployment name
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),  # your deployment name
             messages=[{"role":"user","content":prompt}],
             temperature=0.1
         )
@@ -765,6 +765,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
