@@ -329,6 +329,28 @@
       
       // ---------- Tile focus logic ----------
       let ACTIVE = 'ask';
+
+      async function fetchJSON(url, options){
+        const res = await fetch(url, options);
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        const raw = await res.text();                      // read once
+      
+        // Try parse JSON only if content-type says so
+        let data = null;
+        if (ct.includes('application/json')) {
+          try { data = JSON.parse(raw); } catch {}
+        }
+      
+        if (!res.ok) {
+          // prefer structured error, else show the raw snippet
+          const msg = (data && (data.detail || data.message || data.error)) || raw.slice(0, 400);
+          throw new Error(msg || `${res.status} ${res.statusText}`);
+        }
+      
+        // ok: if JSON parsed, return it; else wrap raw
+        return data ?? { raw };
+      }
+      
       function focusTile(name){
         ACTIVE = name;
       
@@ -567,12 +589,12 @@
         el('status').textContent = 'Asking…';
 
         try{
-          const res = await fetch(`${API}/ask`, {
+          const data = await fetchJSON(`${API}/ask`, {
             method:'POST', headers:{ 'Content-Type':'application/json' },
             body: JSON.stringify({ query: q, user_grade: el('grade').value.trim() || null })
           });
-          const data = await res.json();
-          if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
+          //const data = await res.json();
+          // if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
           // after you parse the response in doAsk:
           console.log('ASK response →', data);
           
@@ -601,9 +623,9 @@
         const status = document.getElementById('ruleStatus');
         status.textContent = 'Reloading…';
         try{
-          const res = await fetch(`${API}/rules/reload`, { method:'POST' });
-          const data = await res.json();
-          if(!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+          const data = await fetchJSON(`${API}/rules/reload`, { method:'POST' });
+          //const data = await res.json();
+          //if(!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
           status.textContent = `Reloaded: ${data.count} active rule(s)`;
           updateRuleKPI('Reloaded');
         }catch(e){
@@ -628,11 +650,11 @@
         if (!payload.prompt){ status.textContent = 'Please enter a natural language rule.'; return; }
 
         try{
-          const res = await fetch(`${API}/rules/suggest`, {
+          const data = await fetchJSON(`${API}/rules/suggest`, {
             method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)
           });
-          const data = await res.json();
-          if(!res.ok){ throw new Error(data.detail || `HTTP ${res.status}`); }
+          //const data = await res.json();
+          //if(!res.ok){ throw new Error(data.detail || `HTTP ${res.status}`); }
           preview.textContent = data.yaml || '';
           const msg = (data.warnings && data.warnings.length) ? `Suggested (with warnings)` : 'Suggested';
           status.textContent = msg;
@@ -652,11 +674,11 @@
         if (!yaml){ status.textContent = 'No YAML to apply.'; return; }
         status.textContent = 'Saving…';
         try{
-          const res = await fetch(`${API}/rules/apply`, {
+          const data = await fetchJSON(`${API}/rules/apply`, {
             method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ yaml })
           });
-          const data = await res.json();
-          if(!res.ok){ throw new Error(data.detail || `HTTP ${res.status}`); }
+          //const data = await res.json();
+          //if(!res.ok){ throw new Error(data.detail || `HTTP ${res.status}`); }
           status.textContent = `Saved: ${data.message || 'ok'}`;
           updateRuleKPI('Saved');
         }catch(e){
@@ -707,12 +729,12 @@
         const top  = Number($('an_top').value || 50);
 
         try{
-          const res = await fetch(`${API}/analyze`, {
+          const data = await fetchJSON(`${API}/analyze`, {
             method:'POST', headers:{ 'Content-Type':'application/json' },
             body: JSON.stringify({ query: q, time_min: from, time_max: to, top })
           });
-          const data = await res.json();
-          if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
+          //const data = await res.json();
+          //if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
           ANOMALIES = Array.isArray(data.anomalies) ? data.anomalies : [];
           renderAnomalies(ANOMALIES);
           $('an_status').textContent = `Detected ${ANOMALIES.length} anomalies`;
@@ -732,11 +754,11 @@
         });
 
         try{
-          const res = await fetch(`${API}/narrative/from_anomalies`, {
+          const data = await fetchJSON(`${API}/narrative/from_anomalies`, {
             method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ items })
           });
-          const data = await res.json();
-          if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
+          //const data = await res.json();
+          //if(!res.ok){ throw new Error(data.detail || `${res.status} ${res.statusText}`); }
           const ul = $('an_narr_list'); ul.innerHTML = '';
           (data.items || []).forEach(n => {
             const li = document.createElement('li');
@@ -768,3 +790,4 @@
     </script>
   </body>
 </html>
+
