@@ -43,11 +43,11 @@ from openai import AzureOpenAI
 def llm_remediation_from_context(ev: "LogEvent", policy_refs: list[LinkedPolicy]) -> list[str]:
     texts = []
     for p in policy_refs:
-        if p.citation:
+        if p.clause_text:
             label = f"[{p.policy_id}/{p.clause_id}]"
             title = f" — {p.title}" if p.title else ""
             section = f" — {p.section}" if p.section else ""
-            texts.append(f"{label}{title}{section}\n{p.citation}")
+            texts.append(f"{label}{title}{section}\n{p.clause_text}")
 
     if not texts:
         # Fallback if we have no text to compare
@@ -713,7 +713,7 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
             chunks = get_chunks_vector(q, ev.user_role or "", top=3, k=20, hybrid=True)
         else:
             chunks = get_chunks(q, ev.user_role or "")[:3]
-        policy_refs = [LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"], citation=c["citation"]) for c in chunks]
+        policy_refs = [LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"], clause_text=c["clause_text"]) for c in chunks]
 
         story = (
             f"{ev.user_role or 'User'} in {ev.location or 'N/A'} performed {ev.action} "
@@ -759,6 +759,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
