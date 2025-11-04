@@ -105,10 +105,15 @@
 
       /* Animated open/close states */
       .tile.collapsed {
-        max-height: 60px;
-        opacity: 0.9;
-        transform: scale(0.98);
+        opacity: 0.95;
+        transform: scale(0.985);
       }
+      /* We animate height on .tile-body only */
+      .tile-body {
+        max-height: none; /* will be controlled via JS */
+        overflow: hidden;
+      }
+
 
       .tile.active {
         transform: scale(1.01);
@@ -516,6 +521,64 @@
         });
       }
 
+      // --- Animation timing
+      const ANIM_MS = 350;
+      
+      // Expand one tile's body and remove height cap after transition
+      function openTile(tile) {
+        const body = tile.querySelector('.tile-body');
+        if (!body) return;
+        tile.classList.add('active');
+        tile.classList.remove('collapsed');
+      
+        // Prepare: from current height to target height
+        body.style.transition = `max-height ${ANIM_MS}ms ease, opacity ${ANIM_MS}ms ease`;
+        body.style.opacity = '1';
+        // Set to computed content height
+        body.style.maxHeight = body.scrollHeight + 'px';
+      
+        // After transition, unlock to 'auto' to allow charts/tables to grow
+        const onEnd = () => {
+          body.style.maxHeight = 'none';
+          body.removeEventListener('transitionend', onEnd);
+        };
+        body.addEventListener('transitionend', onEnd);
+      }
+      
+      // Collapse one tile's body smoothly
+      function closeTile(tile) {
+        const body = tile.querySelector('.tile-body');
+        if (!body) return;
+        tile.classList.remove('active');
+        tile.classList.add('collapsed');
+      
+        // If currently 'none', set to pixel height first
+        if (body.style.maxHeight === '' || body.style.maxHeight === 'none') {
+          body.style.maxHeight = body.scrollHeight + 'px';
+        }
+        // force reflow
+        void body.offsetHeight;
+      
+        body.style.transition = `max-height ${ANIM_MS}ms ease, opacity ${ANIM_MS}ms ease`;
+        body.style.opacity = '0';
+        body.style.maxHeight = '0px';
+      }
+      
+      // Activate a set of tiles (keep multiple open), collapse the rest
+      function activateTiles(tileNames) {
+        const wanted = new Set(tileNames);
+        document.querySelectorAll('.tile').forEach(tile => {
+          const key = tile.getAttribute('data-tile');
+          if (wanted.has(key)) openTile(tile); else closeTile(tile);
+        });
+        ACTIVE = tileNames[0] || ACTIVE;
+      }
+      
+      // Optional: single-tile focus (kept for header clicks)
+      function focusTile(name) {
+        activateTiles([name]);
+      }
+
       function expandTile(tile) {
         const body = tile.querySelector('.tile-body');
         if (!body) return;
@@ -596,14 +659,10 @@
         el('answer').innerHTML = `<div class="card fade-in">${ans}</div>`;
         el('raw').textContent = JSON.stringify(data, null, 2);
       
-        // expand the Answer tile when data arrives
-        const resultTile = el('tile-result');
-        resultTile.classList.remove('collapsed');
-        expandTile(resultTile);
-      
-        // focus back to Ask to show both Ask & Result context
-        focusTile('ask');
+        // Open Ask and Result together (satellite view)
+        activateTiles(['ask', 'result']);
       }
+
 
       /****************************************************
        *  RULE TILE — Suggest + Apply YAML rules
@@ -661,17 +720,29 @@
         const q = el('an_q').value.trim() || null;
         const top = Number(el('an_top').value || 50);
         try {
-          const data = await fetchJSON(`${API}/analyze`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: q, top })
-          });
-          ANOMALIES = Array.isArray(data.anomalies) ? data.anomalies : [];
-          renderAnomalies(ANOMALIES);
-          renderAnalytics(ANOMALIES);
-          el('an_status').textContent = `Detected ${ANOMALIES.length} anomalies`;
-        } catch (e) {
-          el('an_status').textContent = `Error: ${e.message}`;
-        }
+              const data = await fetchJSON(`${API}/analyze`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: q, top })
+              });
+            
+              ANOMALIES = Array.isArray(data.anomalies) ? data.anomalies : [];
+              renderAnomalies(ANOMALIES);
+              el('an_status').textContent = `Detected ${ANOMALIES.length} anomalies`;
+            
+              // Open BOTH tiles so table is visible and analytics render
+              activateTiles(['detect', 'analytics']);
+            
+              // Render charts AFTER expansion so canvases size correctly
+              setTimeout(() => {
+                renderAnalytics(ANOMALIES);
+                // safety: resize after first paint
+                setTimeout(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} }, 60);
+              }, ANIM_MS + 30);
+            
+            } catch (e) {
+              el('an_status').textContent = `Error: ${e.message}`;
+            }
+
       }
 
       el('btnAnalyze').addEventListener('click', doAnalyze);
@@ -747,6 +818,9 @@
       let chartLine, chartBar;
 
       function renderAnalytics(data) {
+        const analyticsTile = document.getElementById('tile-analytics');
+        if (!analyticsTile || analyticsTile.classList.contains('collapsed')) return; // wait until open
+
         focusTile('analytics');
 
         // Compute synthetic data from anomalies
@@ -801,6 +875,9 @@
 
         // --- Heatmap (Signal × Risk) ---
         renderHeatmap(data);
+        requestAnimationFrame(() => {
+          try { chartLine?.resize(); chartBar?.resize(); } catch (_) {}
+        });
       }
 
       function renderHeatmap(data) {
@@ -850,11 +927,15 @@
           const tile = head.closest('.tile');
           const name = tile.getAttribute('data-tile');
           focusTile(name);
+          // if charts are visible after opening analytics, ensure they resize
+          setTimeout(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} }, ANIM_MS + 50);
         });
       });
+
     </script>
   </body>
 </html>
+
 
 
 
