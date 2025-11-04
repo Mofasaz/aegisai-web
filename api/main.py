@@ -493,8 +493,7 @@ def analyze(req: AnalyzeRequest):
 
     # 5) Optional hour-band filtering (inside/non-peak/outside)
     events = raw_events
-
-   if intent.get("inside_hours"):
+    if intent.get("inside_hours"):
         sh, eh = intent["inside_hours"]
         events = []
         for ev in raw_events:
@@ -628,6 +627,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
