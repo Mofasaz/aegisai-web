@@ -270,7 +270,7 @@ def search_events(
             select=["event_id","timestamp","action","status","user_role","system","location","title","log_summary"],
             query_type=qtype,                 # 'simple' or 'full'
             search_mode=mode,                 # 'any' so partial token hits count
-            search_fields=",".join(SEARCH_FIELDS),
+            search_fields=SEARCH_FIELDS,
             vector_queries=vector_queries,
         )
         out = []
