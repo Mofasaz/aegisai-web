@@ -10,7 +10,7 @@ from openai import AzureOpenAI
 
 from api.models import *
 from api.chains import get_llm
-from rules.engine import analyze_events, load_rules_from_file, set_rules, get_rules
+from rules.engine import *
 from retrieval.azure_retriever import get_chunks, get_chunks_vector, count_restricted_hits
 from retrieval.azure_events_retriever import search_events, _to_dt, get_events_by_ids
 from rules.intent import match_risky_intent
@@ -445,10 +445,50 @@ def suggest_rule(req: RuleSuggestRequest, user: UserPrincipal = Depends(require_
     if "id" not in parsed or not parsed["id"]:
         parsed["id"] = f"R-AUTO-{uuid.uuid4().hex[:6].upper()}"
 
+    # Rule vs existing rules: duplicates & contradictions
+    existing = [_normalize_rule_dict(r) for r in _load_active_rules()]
+    dup_errs, dup_warns = _validate_against_existing(parsed, existing)
+
+    # Rule vs policy clauses: deterministic sanity
+    role_for_query = parsed.get("role")
+    pol_errs, pol_warns = _policy_sanity_check(parsed, role_for_query)
+
+    # Optional LLM gate (secondary)
+    llm_errs, llm_warns = [], []
+    if ENABLE_LLM_POLICY_CHECK:
+        # fetch same clauses once more so we don't re-query inside helper
+        clauses = _load_policy_clauses_for_query(
+            " ".join(filter(None, [parsed.get("action"), parsed.get("system"), parsed.get("resource"), parsed.get("category")])),
+            role_for_query
+        )
+        rule_yaml_for_llm = yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
+        le, lw = _llm_policy_conflict_check(rule_yaml_for_llm, clauses)
+        llm_errs, llm_warns = le, lw
+
+    # Combine messages (de-duped, order-preserving)
+    def _dedupe(xs: List[str]) -> List[str]:
+        return list(dict.fromkeys(x.strip() for x in xs if x and x.strip()))
+
+    all_errors   = _dedupe(dup_errs + pol_errs + llm_errs)
+    all_warnings = _dedupe(warns + dup_warns + pol_warns + llm_warns)
+
+    # If there are hard errors (id clash / direct contradiction), block
+    if all_errors:
+        normalized_yaml = yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Rule suggestion conflicts with current configuration/policies.",
+                "errors": all_errors,
+                "warnings": all_warnings,
+                "yaml": normalized_yaml
+            }
+        )
+        
     # Re-dump to normalized YAML
     normalized_yaml = yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
 
-    return RuleSuggestResponse(yaml=normalized_yaml, parsed=parsed, warnings=warns or None)
+    return RuleSuggestResponse(yaml=normalized_yaml, parsed=parsed, warnings=(all_warnings or None))
 
 @app.post("/rules/apply", response_model=RuleApplyResponse)
 def apply_rule(req: RuleApplyRequest, user: UserPrincipal = Depends(require_user)):
@@ -751,6 +791,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
