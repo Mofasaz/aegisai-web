@@ -170,6 +170,71 @@
       .tile:nth-child(2) { animation-delay: .2s; }
       .tile:nth-child(3) { animation-delay: .3s; }
       .tile:nth-child(4) { animation-delay: .4s; }
+
+      /*********** Answer list formatting ***********/
+      .answer-list {
+        list-style: disc inside;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;               /* space between bullets */
+      }
+      .answer-list li {
+        line-height: 1.45;
+        word-break: break-word; /* wrap long tokens */
+      }
+      
+      /*********** Citations & Highlights layout ***********/
+      #citations, #highlights {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 10px;              /* vertical rhythm */
+      }
+      
+      .cite-card, .hi-card {
+        border: 1px solid var(--chip-brd);
+        background: #fff;
+        border-radius: 10px;
+        padding: 10px 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,.04);
+      }
+      
+      .cite-top, .hi-top {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;        /* prevent overlapping on narrow widths */
+      }
+      
+      .cite-id code, .hi-id code {
+        white-space: nowrap;    /* keep [policy/clause] on one line */
+        font-weight: 600;
+      }
+      
+      .cite-tags {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;        /* chips wrap nicely; no overlap */
+      }
+      
+      .cite-meta, .hi-snippet {
+        margin-top: 6px;
+        color: var(--muted);
+        line-height: 1.4;
+        word-break: break-word;
+      }
+
+      /* Badges row */
+      .badges {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;    /* wraps on small widths instead of overlapping */
+        align-items: center;
+      }
+
     </style>
   </head>
 
@@ -230,6 +295,10 @@
         <section class="tile span6 collapsed" data-tile="result" id="tile-result">
           <div class="tile-head"><h3>Answer & Evidence</h3></div>
           <div class="tile-body">
+            <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <h4 style="margin:0;">Answer</h4>
+              <div class="badges" id="metaBadges"></div>
+            </div>
             <div id="answer" class="card"></div>
             <details><summary>Raw JSON</summary><pre id="raw"></pre></details>
             <div class="card"><h4>Citations</h4><ul id="citations" class="clean"></ul></div>
@@ -313,6 +382,53 @@
         return `<span class="chip">${sanitize(vis||'—')}</span>`;
       }
 
+      function pct(n) { return (typeof n === 'number') ? Math.round(n * 100) : null; }
+
+      function confidenceBadge(conf) {
+        const p = pct(conf);
+        if (p === null) return '';
+        const cls = p >= 80 ? 'ok' : (p < 50 ? 'bad' : 'warn');
+        return `<span class="chip ${cls}">Confidence: ${p}%</span>`;
+      }
+      
+      function judgeScoreBadge(score) {
+        const p = pct(score);
+        if (p === null) return '';
+        const cls = p >= 80 ? 'ok' : (p < 50 ? 'bad' : 'warn');
+        return `<span class="chip ${cls}">Judge: ${p}%</span>`;
+      }
+      
+      function reasonsBadge(reasons) {
+        const arr = safeArray(reasons);
+        return arr.length ? `<span class="chip warn">Reasons: ${arr.join('; ')}</span>` : '';
+      }
+      
+      function idBadge(id) {
+        return id ? `<span class="chip">Corr: ${sanitize(String(id)).slice(0,8)}</span>` : '';
+      }
+      
+      function issuesBadges(issues) {
+        const arr = safeArray(issues);
+        return arr.map(code => `<span class="chip warn">${sanitize(code)}</span>`).join('');
+      }
+      
+      function restrictedProbeBadge(flag) {
+        return flag ? `<span class="chip bad">Restricted Probe</span>` : '';
+      }
+      
+      function renderBadges(payload) {
+        const bits = [
+          confidenceBadge(payload.confidence),
+          judgeScoreBadge(payload.judge_score),
+          restrictedProbeBadge(payload.restricted_probe),
+          reasonsBadge(payload.risk_reasons),
+          idBadge(payload.correlation_id),
+          issuesBadges(payload.judge_issues)
+        ].filter(Boolean);
+        return bits.join(' ');
+      }
+
+
       /****************************************************
        *  TILE OPEN/CLOSE (smooth, unclipped)
        ****************************************************/
@@ -382,30 +498,83 @@
 
       function renderAnswer(payload) {
         HAS_RESULT = true;
-        const ans = String(payload.answer ?? payload.Answer ?? payload.output ?? payload.message ?? '').trim();
-        el('answer').innerHTML = ans
-          ? `<div class="card fade-in">${sanitize(ans)}</div>`
-          : `<div class="card">No answer in response.</div>`;
-        el('raw').textContent = JSON.stringify(payload, null, 2);
 
-        // Citations
+         // ✅ render badges
+        const badgesEl = document.getElementById('metaBadges');
+        if (badgesEl) badgesEl.innerHTML = renderBadges(payload);
+        
+        // --- Build answer as bullet list when appropriate
+        const rawAns = String(
+          payload.answer ?? payload.Answer ?? payload.output ?? payload.message ?? ''
+        ).trim();
+      
+        function looksLikeList(lines) {
+          const hits = lines.filter(l => /^(\*|-|•|\d+[.)])\s+/.test(l)).length;
+          return hits >= 2;
+        }
+      
+        function bulletsHTML(txt) {
+          if (!txt) return '';
+          const lines = txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+          // If true list, keep order; else split on sentences to create readable bullets
+          const items = looksLikeList(lines)
+            ? lines.map(s => s.replace(/^(\*|-|•|\d+[.)])\s+/, ''))
+            : txt.replace(/\n+/g, ' ')
+                 .split(/(?<=[.?!\]])\s+(?=[A-Z[(])/)
+                 .map(s => s.trim())
+                 .filter(Boolean);
+          const lis = items.map(s => `<li>${sanitize(s)}</li>`).join('');
+          return `<ul class="answer-list">${lis}</ul>`;
+        }
+      
+        // 1) Answer
+        el('answer').innerHTML = rawAns
+          ? `<div class="card fade-in">${bulletsHTML(rawAns)}</div>`
+          : `<div class="card">No answer in response.</div>`;
+      
+        // 2) Raw JSON
+        el('raw').textContent = JSON.stringify(payload, null, 2);
+      
+        // 3) Citations (as compact cards)
         const citations = safeArray(payload.citations || payload.Citations);
         const citesUL = el('citations'); citesUL.innerHTML = '';
         if (!citations.length) {
           citesUL.innerHTML = `<li class="small">None</li>`;
         } else {
           citations.forEach(c => {
-            const grades = Array.isArray(c.allowed_grades) ? ` <span class="chip">grades: ${c.allowed_grades.join(', ')}</span>` : '';
-            const vis = visibilityBadge(c.visibility);
-            const title = c.title ? ` — ${sanitize(c.title)}` : '';
-            const sec = c.section ? ` — ${sanitize(c.section)}` : '';
+            const id = `[${sanitize(c.policy_id)}/${sanitize(c.clause_id)}]`;
+            const title = c.title ? sanitize(c.title) : '';
+            const sec = c.section ? sanitize(c.section) : '';
+            const grades = Array.isArray(c.allowed_grades) ? `grades: ${c.allowed_grades.join(', ')}` : null;
+      
+            // visibility chip
+            const visChip = (() => {
+              const v = (c.visibility || '').toLowerCase();
+              if (v === 'restricted') return `<span class="chip bad">Restricted</span>`;
+              if (v === 'internal')   return `<span class="chip warn">Internal</span>`;
+              if (v === 'public')     return `<span class="chip ok">Public</span>`;
+              return `<span class="chip">${sanitize(c.visibility || '—')}</span>`;
+            })();
+      
+            // grades chip (if present)
+            const gradesChip = grades ? `<span class="chip">${sanitize(grades)}</span>` : '';
+      
             const li = document.createElement('li');
-            li.innerHTML = `<code>[${sanitize(c.policy_id)}/${sanitize(c.clause_id)}]</code>${title}${sec} ${vis}${grades}`;
+            li.innerHTML = `
+              <div class="cite-card">
+                <div class="cite-top">
+                  <div class="cite-id"><code>${id}</code></div>
+                  <div class="cite-tags">${visChip}${gradesChip}</div>
+                </div>
+                <div class="cite-meta small">
+                  ${title}${title && sec ? ' — ' : ''}${sec}
+                </div>
+              </div>`;
             citesUL.appendChild(li);
           });
         }
-
-        // Highlights
+      
+        // 4) Highlights (as compact cards)
         const highlights = safeArray(payload.highlights || payload.Highlights);
         const hiUL = el('highlights'); hiUL.innerHTML = '';
         if (!highlights.length) {
@@ -416,19 +585,20 @@
             const snip = sanitize(h.snippet || '');
             const li = document.createElement('li');
             li.innerHTML = `
-              <div class="row" style="justify-content:space-between; align-items:flex-start;">
-                <div>
-                  <div><code>${key}</code></div>
-                  <div class="small" style="margin-top:4px">${snip}</div>
+              <div class="hi-card">
+                <div class="hi-top">
+                  <div class="hi-id"><code>${key}</code></div>
                 </div>
+                <div class="hi-snippet small">${snip}</div>
               </div>`;
             hiUL.appendChild(li);
           });
         }
-
-        // Open Ask + Result
+      
+        // 5) Open Ask + Result together
         activateTiles(['ask', 'result']);
       }
+
 
       /****************************************************
        *  RULES TILE
@@ -592,3 +762,4 @@
     </script>
   </body>
 </html>
+
