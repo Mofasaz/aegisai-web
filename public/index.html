@@ -453,7 +453,7 @@
       
         const lines = [];
         if (payload.restricted_probe) lines.push(restrictedProbeBadge(true));
-        if (safeArray(payload.risk_reasons).length) lines.push(reasonsBadge(payload.risk_reasons));
+        //if (safeArray(payload.risk_reasons).length) lines.push(reasonsBadge(payload.risk_reasons));
         safeArray(payload.judge_issues).forEach(code => {
           lines.push(`<span class="chip warn">${sanitize(code)}</span>`);
         });
@@ -797,6 +797,7 @@
     </script>
   </body>
 </html>
+
 
 
 
