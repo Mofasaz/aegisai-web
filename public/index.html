@@ -5,11 +5,7 @@
     <title>AegisAI — Policy Copilot</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- Charts & D3 (CDN, Azure-friendly) -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
-    <!-- Annotation plugin version compatible with Chart.js v4 -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- No chart libraries loaded -->
 
     <style>
       /****************************************************
@@ -99,7 +95,6 @@
       .tile-body {
         padding: 14px 16px;
         background: var(--panel);
-        /* height animation handled via JS */
         overflow: hidden;
         max-height: none;
         transition: max-height 350ms ease, opacity 350ms ease;
@@ -156,18 +151,6 @@
       details summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 
       /****************************************************
-       *  ANALYTICS — single compact row
-       ****************************************************/
-      .analytics-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
-      }
-      @media (max-width: 980px) { .analytics-grid { grid-template-columns: 1fr; } }
-      .mini-chart { width: 100%; height: 180px; }
-      #anomalyHeatmap { width: 100%; height: 180px; }
-
-      /****************************************************
        *  SLIDERS
        ****************************************************/
       .slider-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
@@ -187,8 +170,6 @@
       .tile:nth-child(2) { animation-delay: .2s; }
       .tile:nth-child(3) { animation-delay: .3s; }
       .tile:nth-child(4) { animation-delay: .4s; }
-      .tile:nth-child(5) { animation-delay: .5s; }
-      .tile:nth-child(6) { animation-delay: .6s; }
     </style>
   </head>
 
@@ -266,7 +247,7 @@
               <button id="btnAnalyze">Analyze</button>
             </div>
 
-            <!-- Sliders -->
+            <!-- Sliders (placeholder UX) -->
             <div class="slider-group">
               <input type="range" id="yearSlider" min="2023" max="2025" value="2025">
               <input type="range" id="monthSlider" min="1" max="12" value="11">
@@ -295,27 +276,6 @@
             </div>
           </div>
         </section>
-
-        <!-- ANALYTICS -->
-        <section class="tile span6 collapsed" data-tile="analytics" id="tile-analytics">
-          <div class="tile-head"><h3>Analytics Dashboard</h3></div>
-          <div class="tile-body fade-in">
-            <div class="analytics-grid">
-              <div class="card">
-                <h4>Anomaly Trend</h4>
-                <canvas id="analytics-chart" class="mini-chart"></canvas>
-              </div>
-              <div class="card">
-                <h4>Risk Distribution</h4>
-                <canvas id="analytics-bar" class="mini-chart"></canvas>
-              </div>
-              <div class="card">
-                <h4>Signal Density (Heatmap)</h4>
-                <div id="anomalyHeatmap"></div>
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
     </div>
 
@@ -328,7 +288,6 @@
       let ACTIVE = 'ask';
       let HAS_RESULT = false;
       let ANOMALIES = [];
-      let chartLine, chartBar;
 
       const el = (id) => document.getElementById(id);
       const $ = el;
@@ -391,7 +350,6 @@
           const tile = head.closest('.tile');
           const name = tile.getAttribute('data-tile');
           focusTile(name);
-          setTimeout(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} }, ANIM_MS + 50);
         });
       });
 
@@ -535,14 +493,8 @@
           renderAnomalies(ANOMALIES);
           el('an_status').textContent = `Detected ${ANOMALIES.length} anomalies`;
 
-          // Open Detect + Analytics together for dual view
-          activateTiles(['detect', 'analytics']);
-
-          // Render analytics after expansion to size canvases correctly
-          setTimeout(() => {
-            renderAnalytics(ANOMALIES);
-            setTimeout(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} }, 60);
-          }, ANIM_MS + 30);
+          // Keep Detect open
+          activateTiles(['detect']);
 
         } catch (e) {
           el('an_status').textContent = `Error: ${e.message}`;
@@ -612,8 +564,6 @@
           el('an_narr').style.display = 'block';
           const detectTile = el('tile-detect');
           openTile(detectTile);
-          // Keep dual view
-          activateTiles(['detect', 'analytics']);
           // Scroll into view
           setTimeout(() => { el('an_narr').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, ANIM_MS + 50);
 
@@ -636,125 +586,9 @@
       updateDateLabel();
 
       /****************************************************
-       *  ANALYTICS — compact charts + heatmap
-       ****************************************************/
-      function renderAnalytics(anomalies) {
-        const analyticsTile = document.getElementById('tile-analytics');
-        if (!analyticsTile || analyticsTile.classList.contains('collapsed')) return;
-
-        const xLabels = anomalies.map((_, i) => `#${i + 1}`);
-        const risks = anomalies.map(a => a.risk_score || 0);
-        const signalsCount = anomalies.map(a => (a.signals || []).length);
-
-        // Line — Risk
-        const ctx1 = document.getElementById('analytics-chart');
-        if (chartLine) chartLine.destroy();
-        chartLine = new Chart(ctx1, {
-          type: 'line',
-          data: {
-            labels: xLabels,
-            datasets: [{
-              label: 'Risk',
-              data: risks,
-              borderColor: '#1976d2',
-              backgroundColor: 'rgba(25,118,210,0.12)',
-              tension: 0.35,
-              fill: true,
-              pointRadius: 2,
-              pointHoverRadius: 4
-            }]
-          },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            animation: { duration: 600, easing: 'easeOutQuad' },
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                intersect: false,
-                callbacks: {
-                  label: (ctx) => {
-                    const i = ctx.dataIndex, a = anomalies[i];
-                    const sigs = (a.signals || []).join(', ') || '—';
-                    const expl = (a.explain || '').slice(0, 80) + ((a.explain || '').length > 80 ? '…' : '');
-                    return [`Risk: ${a.risk_score}`, `Signals: ${sigs}`, `Event: ${a.event_id}`, `Explain: ${expl}`];
-                  },
-                  title: (items) => `Event ${items[0].label}`
-                }
-              }
-            },
-            scales: {
-              y: { beginAtZero: true, max: 100, title: { display: true, text: 'Risk' } },
-              x: { title: { display: true, text: 'Events (index)' } }
-            }
-          }
-        });
-
-        // Bar — Signals per Event
-        const ctx2 = document.getElementById('analytics-bar');
-        if (chartBar) chartBar.destroy();
-        chartBar = new Chart(ctx2, {
-          type: 'bar',
-          data: { labels: xLabels, datasets: [{ label: 'Signals', data: signalsCount, backgroundColor: 'rgba(229,57,53,0.75)' }] },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            animation: { duration: 500, easing: 'easeOutCubic' },
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: (ctx) => {
-                    const i = ctx.dataIndex, a = anomalies[i];
-                    const sigs = (a.signals || []).join(', ') || '—';
-                    return [`Signals: ${signalsCount[i]}`, `List: ${sigs}`];
-                  },
-                  title: (items) => `Event ${items[0].label}`
-                }
-              }
-            },
-            scales: {
-              y: { beginAtZero: true, title: { display: true, text: 'Signals Count' } },
-              x: { title: { display: true, text: 'Events (index)' } }
-            }
-          }
-        });
-
-        // Heatmap
-        renderHeatmap(anomalies);
-
-        // Final sizing after animations
-        requestAnimationFrame(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} });
-      }
-
-      function renderHeatmap(data) {
-        const container = d3.select('#anomalyHeatmap');
-        container.html('');
-        const width = container.node().clientWidth;
-        const height = container.node().clientHeight;
-        const svg = container.append('svg').attr('width', width).attr('height', height);
-
-        const cols = 10;
-        const rows = Math.max(1, Math.ceil(data.length / cols));
-        const cellW = width / cols;
-        const cellH = height / rows;
-
-        svg.selectAll('rect')
-          .data(data)
-          .enter()
-          .append('rect')
-          .attr('x', (_, i) => (i % cols) * cellW)
-          .attr('y', (_, i) => Math.floor(i / cols) * cellH)
-          .attr('width', Math.max(0, cellW - 2))
-          .attr('height', Math.max(0, cellH - 2))
-          .attr('rx', 3).attr('ry', 3)
-          .attr('fill', d => d3.interpolateRdYlBu(1 - (d.risk_score || 0) / 100))
-          .attr('opacity', 0)
-          .transition().duration(400).delay((_, i) => i * 15).attr('opacity', 1);
-      }
-
-      /****************************************************
        *  INIT — open Ask by default
        ****************************************************/
-       activateTiles(['ask']); // ensure Ask open with JS-driven height
+      activateTiles(['ask']); // ensure Ask open with JS-driven height
     </script>
   </body>
 </html>
