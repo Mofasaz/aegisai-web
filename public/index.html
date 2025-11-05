@@ -262,6 +262,19 @@
         color: var(--accent);
       }
 
+      /* Remediation bullets inside Narratives */
+      .narr-list {
+        list-style: disc inside;
+        margin: 6px 0 0 0;
+        padding: 0;
+        display: grid;
+        gap: 6px;
+      }
+      .narr-list li {
+        line-height: 1.45;
+        word-break: break-word;
+      }
+
     </style>
   </head>
 
@@ -723,9 +736,10 @@
             body: JSON.stringify({ items })
           });
 
-          const ul = el('an_narr_list'); ul.innerHTML = '';
+          const ul = el('an_narr_list'); 
+          ul.innerHTML = '';
           (data.items || []).forEach(n => {
-            // Build Policy paragraph text
+            // Build Policy line
             const policiesText = safeArray(n.linked_policies).map(p => {
               const id = `[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]`;
               const meta = [p.title ? sanitize(p.title) : null, p.section ? sanitize(p.section) : null]
@@ -734,18 +748,22 @@
               return `${id}${meta ? ' — ' + meta : ''}${clause}`;
             }).join('; ') || '—';
           
-            // Build Remediation paragraph text
-            const remText = safeArray(n.remediation).join('; ') || '—';
+            // Build Remediation bullets
+            const remLis = (safeArray(n.remediation).length
+              ? safeArray(n.remediation).map(r => `<li>${sanitize(r)}</li>`).join('')
+              : '<li>—</li>');
           
             const li = document.createElement('li');
             li.innerHTML = `
               <div class="card">
                 <p class="narr-p"><strong>Event:</strong> <code>${sanitize(n.event_id)}</code></p>
                 <p class="narr-p"><strong>Policy:</strong> ${policiesText}</p>
-                <p class="narr-p"><strong>Remediation:</strong> ${sanitize(remText)}</p>
+                <div class="narr-p"><strong>Remediation:</strong></div>
+                <ul class="narr-list">${remLis}</ul>
               </div>`;
             ul.appendChild(li);
           });
+
 
           // Reveal narratives and ensure Detect is open/expanded
           el('an_narr').style.display = 'block';
@@ -779,5 +797,6 @@
     </script>
   </body>
 </html>
+
 
 
