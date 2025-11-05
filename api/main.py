@@ -97,18 +97,6 @@ Rules:
         # safe fallback
         return ["Notify line manager", "Reverse/quarantine action if possible", "Schedule targeted policy refresher"]
 
-# --- utils: text dedupe & normalize ---
-def _dedupe_lines_block(txt: str) -> str:
-    if not txt:
-        return txt
-    lines = [l.strip() for l in txt.splitlines() if l.strip()]
-    out, seen = [], set()
-    for l in lines:
-        if l.lower() in seen:
-            continue
-        seen.add(l.lower())
-        out.append(l)
-    return "\n".join(out)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -350,6 +338,7 @@ def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(requi
 
     # 4) Push anomaly row to Power BI if anything suspicious
     if reasons:
+        reasons = list(dict.fromkeys(reasons))
         try:
             row = {
                 "ts": datetime.now(timezone.utc).isoformat(),
@@ -393,7 +382,7 @@ def ask(req: AskRequest, response: Response, user: UserPrincipal = Depends(requi
         {"role": "user", "content": f"Q: {req.query}\n\nContext:\n{ctx}"}
     ]
     out = llm.invoke(msg)
-    answer = _dedupe_lines_block(getattr(out, "content", str(out)))
+    answer = getattr(out, "content", str(out))
 
     # 7) LLM judge + confidence
     judge = _llm_judge(answer, [c["clause_text"] for c in chunks[:3]])
@@ -762,6 +751,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
