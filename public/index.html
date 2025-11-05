@@ -5,14 +5,15 @@
     <title>AegisAI — Policy Copilot</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- External chart libraries (CDN-ready for Azure) -->
+    <!-- Charts & D3 (CDN, Azure-friendly) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+    <!-- Annotation plugin version compatible with Chart.js v4 -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
     <style>
       /****************************************************
-       *  LIGHT MODE COLOR THEME — clean white dashboard
+       *  LIGHT MODE THEME — clean white dashboard
        ****************************************************/
       :root {
         --bg: #ffffff;
@@ -30,7 +31,6 @@
       }
 
       * { box-sizing: border-box; }
-
       html, body { height: 100%; margin: 0; padding: 0; }
 
       body {
@@ -41,49 +41,23 @@
         line-height: 1.5;
       }
 
-      /****************************************************
-       *  GLOBAL WRAPPER + HEADER
-       ****************************************************/
-      .wrap {
-        max-width: 1200px;
-        margin: 40px auto;
-        padding: 0 16px;
-      }
+      .wrap { max-width: 1200px; margin: 40px auto; padding: 0 16px; }
 
-      header {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 24px;
-      }
-
+      header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
       .brand {
-        width: 38px;
-        height: 38px;
-        display: grid;
-        place-items: center;
-        border-radius: 10px;
-        font-weight: 700;
-        color: #fff;
+        width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; font-weight: 700; color: #fff;
         background: linear-gradient(135deg, var(--accent), #4ea1ff);
         box-shadow: 0 10px 25px rgba(25, 118, 210, 0.35);
       }
-
-      header h1 {
-        margin: 0;
-        font-size: 20px;
-        letter-spacing: 0.3px;
-      }
+      header h1 { margin: 0; font-size: 20px; letter-spacing: .3px; }
 
       /****************************************************
-       *  TILE GRID LAYOUT
+       *  TILE GRID
        ****************************************************/
       .tiles {
-        display: grid;
-        gap: 16px;
+        display: grid; gap: 16px;
         grid-template-columns: repeat(6, 1fr);
         grid-auto-rows: minmax(0, auto);
-        transition: all 0.4s ease;
       }
 
       .tile {
@@ -93,281 +67,128 @@
         background: linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%);
         border: 1px solid var(--chip-brd);
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-        overflow: hidden;
-        cursor: default;
+        overflow: visible;
         transition: transform 0.35s ease, box-shadow 0.35s ease, opacity 0.3s ease;
+        opacity: 0; /* for initial stagger animation */
+        animation: tilePopIn 0.6s ease forwards;
       }
+      .tile:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.12); }
+      .tile.active { transform: scale(1.01); box-shadow: 0 12px 28px rgba(0,0,0,0.15); }
+      .tile.collapsed { opacity: 0.95; transform: scale(0.985); }
 
-      .tile:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
-      }
-
-      /* Animated open/close states */
-      .tile.collapsed {
-        opacity: 0.95;
-        transform: scale(0.985);
-      }
-      /* We animate height on .tile-body only */
-      .tile-body {
-        max-height: none; /* will be controlled via JS */
-        overflow: hidden;
-      }
-
-
-      .tile.active {
-        transform: scale(1.01);
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
-      }
-
-      @media (max-width: 980px) {
-        .tiles {
-          grid-template-columns: 1fr;
-        }
-        .tile, .tile.span2, .tile.span4, .tile.span6 {
-          grid-column: span 1;
-        }
-      }
-
-      /* span helpers for desktop */
       .tile.span2 { grid-column: span 2; }
       .tile.span4 { grid-column: span 4; }
       .tile.span6 { grid-column: span 6; }
 
+      @media (max-width: 980px) {
+        .tiles { grid-template-columns: 1fr; }
+        .tile, .tile.span2, .tile.span4, .tile.span6 { grid-column: span 1; }
+      }
+
       /****************************************************
-       *  TILE HEADER + BODY
+       *  TILE HEAD + BODY
        ****************************************************/
       .tile-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 14px 16px;
-        border-bottom: 1px solid var(--chip-brd);
-        background: #fff;
-        cursor: pointer;
-        user-select: none;
-        transition: background 0.3s ease;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 16px; border-bottom: 1px solid var(--chip-brd);
+        background: #fff; cursor: pointer; user-select: none; transition: background .3s ease;
       }
-
-      .tile-head:hover {
-        background: #f3f6ff;
-      }
-
-      .tile-head h3 {
-        margin: 0;
-        font-size: 15px;
-        color: var(--accent);
-      }
+      .tile-head:hover { background: #f3f6ff; }
+      .tile-head h3 { margin: 0; font-size: 15px; color: var(--accent); }
 
       .tile-body {
         padding: 14px 16px;
-        transition: all 0.35s ease;
         background: var(--panel);
-      }
-
-      .tile.collapsed .tile-body {
-        opacity: 0;
-        max-height: 0;
-        padding: 0 16px;
+        /* height animation handled via JS */
+        overflow: hidden;
+        max-height: none;
+        transition: max-height 350ms ease, opacity 350ms ease;
       }
 
       /****************************************************
-       *  INPUTS + BUTTONS
+       *  FORMS + BUTTONS
        ****************************************************/
-      .row {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-
+      .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
       input, textarea, button {
-        border-radius: 12px;
-        border: 1px solid var(--ring);
-        outline: none;
-        transition: all 0.2s ease;
-        font-family: inherit;
+        border-radius: 12px; border: 1px solid var(--ring); outline: none; transition: all .2s ease; font-family: inherit;
       }
-
-      input, textarea {
-        width: 100%;
-        padding: 10px 12px;
-        background: #fff;
-        color: var(--text);
-      }
-
-      input:focus, textarea:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.2);
-      }
-
+      input, textarea { width: 100%; padding: 10px 12px; background: #fff; color: var(--text); }
+      input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(25,118,210,.2); }
       button {
         background: linear-gradient(135deg, var(--accent), #4ea1ff);
-        border: none;
-        padding: 10px 18px;
-        color: white;
-        font-weight: 600;
-        cursor: pointer;
-        box-shadow: 0 5px 15px rgba(25, 118, 210, 0.3);
+        border: none; padding: 10px 18px; color: white; font-weight: 600; cursor: pointer;
+        box-shadow: 0 5px 15px rgba(25,118,210,0.3);
       }
-
-      button:hover {
-        filter: brightness(1.05);
-        transform: translateY(-1px);
-      }
-
-      button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
+      button:hover { filter: brightness(1.05); transform: translateY(-1px); }
+      button:disabled { opacity: .6; cursor: not-allowed; }
       .small { color: var(--muted); }
 
       /****************************************************
-       *  CHIPS + KPI BADGES
+       *  CHIPS + KPI
        ****************************************************/
       .chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: var(--chip);
-        border: 1px solid var(--chip-brd);
-        color: var(--text);
-        font-size: 12px;
-        padding: 4px 8px;
-        border-radius: 999px;
+        display: inline-flex; align-items: center; gap: 6px; background: var(--chip);
+        border: 1px solid var(--chip-brd); color: var(--text);
+        font-size: 12px; padding: 4px 8px; border-radius: 999px;
       }
-
-      .chip.ok   { background: rgba(46,125,50,.1); border-color: rgba(46,125,50,.3); color: var(--ok); }
+      .chip.ok { background: rgba(46,125,50,.1); border-color: rgba(46,125,50,.3); color: var(--ok); }
       .chip.warn { background: rgba(237,108,2,.1); border-color: rgba(237,108,2,.3); color: var(--warn); }
-      .chip.bad  { background: rgba(211,47,47,.1); border-color: rgba(211,47,47,.3); color: var(--bad); }
+      .chip.bad { background: rgba(211,47,47,.1); border-color: rgba(211,47,47,.3); color: var(--bad); }
 
-      .kpi {
-        font-weight: 600;
-        font-size: 12px;
-        padding: 3px 8px;
-        border-radius: 999px;
-        background: #fff;
-        border: 1px solid var(--chip-brd);
-      }
-
-      .kpi.ok   { color: var(--ok); }
-      .kpi.warn { color: var(--warn); }
-      .kpi.bad  { color: var(--bad); }
+      .kpi { font-weight: 600; font-size: 12px; padding: 3px 8px; border-radius: 999px; background: #fff; border: 1px solid var(--chip-brd); }
+      .kpi.ok { color: var(--ok); } .kpi.warn { color: var(--warn); } .kpi.bad { color: var(--bad); }
 
       /****************************************************
-       *  CARD + TABLE + DETAILS
+       *  CARD + TABLE
        ****************************************************/
       .card {
-        background: #fff;
-        border: 1px solid var(--chip-brd);
-        border-radius: 12px;
-        padding: 12px;
-        margin-top: 10px;
+        background: #fff; border: 1px solid var(--chip-brd); border-radius: 12px; padding: 12px; margin-top: 10px;
         box-shadow: 0 3px 8px rgba(0,0,0,0.05);
       }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-
-      th, td {
-        text-align: left;
-        padding: 6px 8px;
-        border-bottom: 1px solid var(--chip-brd);
-      }
-
-      tr:hover td {
-        background: #f4f8ff;
-      }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--chip-brd); }
+      tr:hover td { background: #f4f8ff; }
 
       pre {
-        background: #f8f9fb;
-        border: 1px solid var(--chip-brd);
-        border-radius: 10px;
-        padding: 10px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 13px;
-        color: var(--muted);
+        background: #f8f9fb; border: 1px solid var(--chip-brd); border-radius: 10px; padding: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; color: var(--muted);
       }
-
-      details summary {
-        cursor: pointer;
-        color: var(--accent);
-        font-weight: 600;
-      }
+      details summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 
       /****************************************************
-       *  HEATMAP + CHART CONTAINERS
+       *  ANALYTICS — single compact row
        ****************************************************/
-      #analytics-chart, #analytics-bar {
-        width: 100%;
-        height: 280px;
+      .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
       }
-
-      #anomalyHeatmap {
-        width: 100%;
-        height: 220px;
-        margin-top: 10px;
-      }
+      @media (max-width: 980px) { .analytics-grid { grid-template-columns: 1fr; } }
+      .mini-chart { width: 100%; height: 180px; }
+      #anomalyHeatmap { width: 100%; height: 180px; }
 
       /****************************************************
-       *  SLIDERS (Year / Month / Day)
+       *  SLIDERS
        ****************************************************/
-      .slider-group {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-        margin-top: 6px;
-      }
-
-      input[type=range] {
-        flex: 1;
-        accent-color: var(--accent);
-      }
+      .slider-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+      input[type=range] { flex: 1; accent-color: var(--accent); }
 
       /****************************************************
-       *  FADE + SCALE ANIMATION HELPERS
+       *  FADE + STAGGER ANIMATIONS
        ****************************************************/
-      @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(12px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
+      @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+      .fade-in { animation: fadeInUp .5s ease forwards; }
 
-      .fade-in {
-        animation: fadeInUp 0.5s ease forwards;
-      }
-
-      /****************************************************
-       *  DASHBOARD LOAD-IN ANIMATION — smooth staggered tiles
-       ****************************************************/
       @keyframes tilePopIn {
-        from {
-          opacity: 0;
-          transform: translateY(20px) scale(0.98);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-        }
+        from { opacity: 0; transform: translateY(20px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
       }
-      
-      /* Apply staggered animation to all tiles */
-      .tile {
-        opacity: 0;
-        animation: tilePopIn 0.6s ease forwards;
-      }
-      
-      /* Slight delay per tile for cascading effect */
-      .tile:nth-child(1) { animation-delay: 0.1s; }
-      .tile:nth-child(2) { animation-delay: 0.2s; }
-      .tile:nth-child(3) { animation-delay: 0.3s; }
-      .tile:nth-child(4) { animation-delay: 0.4s; }
-      .tile:nth-child(5) { animation-delay: 0.5s; }
-      .tile:nth-child(6) { animation-delay: 0.6s; }
-
+      .tile:nth-child(1) { animation-delay: .1s; }
+      .tile:nth-child(2) { animation-delay: .2s; }
+      .tile:nth-child(3) { animation-delay: .3s; }
+      .tile:nth-child(4) { animation-delay: .4s; }
+      .tile:nth-child(5) { animation-delay: .5s; }
+      .tile:nth-child(6) { animation-delay: .6s; }
     </style>
   </head>
 
@@ -379,20 +200,20 @@
       </header>
 
       <div class="tiles" id="tiles">
-        <!-- ASK TILE -->
+        <!-- ASK -->
         <section class="tile span3 active" data-tile="ask" id="tile-ask">
           <div class="tile-head"><h3>Ask</h3><span id="kpi-lastQuery" class="kpi">—</span></div>
           <div class="tile-body">
             <div class="row"><input id="grade" placeholder="Grade (e.g., Cabin Crew / Pilot / HR Manager)" /></div>
             <div class="row" style="margin-top:8px;"><textarea id="q" rows="3" placeholder="Ask a policy question..."></textarea></div>
 
-            <!-- Default prompt buttons -->
+            <!-- Default prompts -->
             <div id="suggested-prompts" class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px;">
-              <button class="chip gray">Recent policy changes</button>
-              <button class="chip gray">Leave policy for Cabin Crew</button>
-              <button class="chip gray">Off-hour access rules</button>
-              <button class="chip gray">Payroll adjustment process</button>
-              <button class="chip gray">Overtime approval limits</button>
+              <button class="chip">Recent policy changes</button>
+              <button class="chip">Leave policy for Cabin Crew</button>
+              <button class="chip">Off-hour access rules</button>
+              <button class="chip">Payroll adjustment process</button>
+              <button class="chip">Overtime approval limits</button>
             </div>
 
             <div class="row" style="margin-top:10px;">
@@ -402,7 +223,7 @@
           </div>
         </section>
 
-        <!-- RULE TILE -->
+        <!-- RULES -->
         <section class="tile span3 collapsed" data-tile="rules" id="tile-rules">
           <div class="tile-head"><h3>Propose Rule</h3><span id="kpi-rule" class="kpi">idle</span></div>
           <div class="tile-body">
@@ -424,7 +245,7 @@
           </div>
         </section>
 
-        <!-- ANSWER TILE -->
+        <!-- ANSWER & EVIDENCE -->
         <section class="tile span6 collapsed" data-tile="result" id="tile-result">
           <div class="tile-head"><h3>Answer & Evidence</h3></div>
           <div class="tile-body">
@@ -435,37 +256,39 @@
           </div>
         </section>
 
-        <!-- DETECT & NARRATE TILE -->
+        <!-- DETECT & NARRATE -->
         <section class="tile span6 collapsed" data-tile="detect" id="tile-detect">
           <div class="tile-head"><h3>Detect & Narrate</h3><span id="kpi-anom" class="kpi">anom 0</span></div>
           <div class="tile-body">
-            <!-- Query + sliders -->
             <div class="row">
               <input id="an_q" placeholder="Query (e.g., login failed OR access_denied)" />
               <input id="an_top" type="number" min="1" max="500" value="50" style="max-width:110px" />
               <button id="btnAnalyze">Analyze</button>
             </div>
 
+            <!-- Sliders -->
             <div class="slider-group">
               <input type="range" id="yearSlider" min="2023" max="2025" value="2025">
               <input type="range" id="monthSlider" min="1" max="12" value="11">
-              <input type="range" id="daySlider" min="1" max="31" value="4">
+              <input type="range" id="daySlider" min="1" max="31" value="5">
               <small id="sliderDateLabel" class="small"></small>
             </div>
 
             <div id="an_status" class="small" style="margin-top:6px;"></div>
 
-            <!-- Results Table -->
+            <!-- Results -->
             <div id="an_results" class="card" style="display:none;">
               <div class="row" style="justify-content:space-between;align-items:center;">
                 <h4>Anomalies</h4>
                 <button id="btnNarrate" disabled>Narrate selected</button>
               </div>
               <div class="small" style="color:var(--muted);margin-bottom:6px;">Select rows and click “Narrate selected”.</div>
-              <table><thead><tr><th></th><th>Event</th><th>Signals</th><th>Risk</th><th>Explain</th></tr></thead><tbody id="an_body"></tbody></table>
+              <table>
+                <thead><tr><th></th><th>Event</th><th>Signals</th><th>Risk</th><th>Explain</th></tr></thead>
+                <tbody id="an_body"></tbody>
+              </table>
             </div>
 
-            <!-- Narratives -->
             <div id="an_narr" class="card" style="display:none;">
               <h4>Narratives</h4>
               <ul id="an_narr_list" class="clean"></ul>
@@ -473,98 +296,85 @@
           </div>
         </section>
 
-        <!-- NEW ANALYTICS TILE -->
+        <!-- ANALYTICS -->
         <section class="tile span6 collapsed" data-tile="analytics" id="tile-analytics">
           <div class="tile-head"><h3>Analytics Dashboard</h3></div>
           <div class="tile-body fade-in">
-            <div class="card">
-              <h4>Anomaly Trend (Line)</h4>
-              <canvas id="analytics-chart"></canvas>
-            </div>
-            <div class="card">
-              <h4>Risk Distribution (Bar)</h4>
-              <canvas id="analytics-bar"></canvas>
-            </div>
-            <div class="card">
-              <h4>Heatmap — Signal Density</h4>
-              <div id="anomalyHeatmap"></div>
+            <div class="analytics-grid">
+              <div class="card">
+                <h4>Anomaly Trend</h4>
+                <canvas id="analytics-chart" class="mini-chart"></canvas>
+              </div>
+              <div class="card">
+                <h4>Risk Distribution</h4>
+                <canvas id="analytics-bar" class="mini-chart"></canvas>
+              </div>
+              <div class="card">
+                <h4>Signal Density (Heatmap)</h4>
+                <div id="anomalyHeatmap"></div>
+              </div>
             </div>
           </div>
         </section>
       </div>
     </div>
-        <script>
+
+    <script>
       /****************************************************
-       *  GLOBAL CONFIG + TILE ANIMATION LOGIC
+       *  GLOBALS
        ****************************************************/
-      const API = ''; // same-origin; adjust if hosted separately
+      const API = ''; // same-origin
+      const ANIM_MS = 350;
       let ACTIVE = 'ask';
       let HAS_RESULT = false;
       let ANOMALIES = [];
+      let chartLine, chartBar;
 
       const el = (id) => document.getElementById(id);
       const $ = el;
 
-      // Smooth tile activation (with animated transitions)
-      function focusTile(name) {
-        ACTIVE = name;
-        document.querySelectorAll('.tile').forEach(t => {
-          const key = t.getAttribute('data-tile');
-          const isActive = (key === name);
-          if (isActive) {
-            t.classList.add('active');
-            t.classList.remove('collapsed');
-          } else {
-            t.classList.remove('active');
-            t.classList.add('collapsed');
-          }
+      /****************************************************
+       *  UTILITIES
+       ****************************************************/
+      function fetchJSON(url, options) {
+        return fetch(url, options).then(async (res) => {
+          const text = await res.text();
+          let data; try { data = JSON.parse(text); } catch { data = null; }
+          if (!res.ok) throw new Error((data && (data.detail || data.message)) || text);
+          return data ?? {};
         });
       }
+      function safeArray(x){ return Array.isArray(x) ? x : []; }
+      function sanitize(s){ return String(s||'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+      function visibilityBadge(vis){
+        const v = (vis||'').toLowerCase();
+        if (v === 'restricted') return `<span class="chip bad">Restricted</span>`;
+        if (v === 'internal')   return `<span class="chip warn">Internal</span>`;
+        if (v === 'public')     return `<span class="chip ok">Public</span>`;
+        return `<span class="chip">${sanitize(vis||'—')}</span>`;
+      }
 
-      // --- Animation timing
-      const ANIM_MS = 350;
-      
-      // Expand one tile's body and remove height cap after transition
+      /****************************************************
+       *  TILE OPEN/CLOSE (smooth, unclipped)
+       ****************************************************/
       function openTile(tile) {
-        const body = tile.querySelector('.tile-body');
-        if (!body) return;
-        tile.classList.add('active');
-        tile.classList.remove('collapsed');
-      
-        // Prepare: from current height to target height
+        const body = tile.querySelector('.tile-body'); if (!body) return;
+        tile.classList.add('active'); tile.classList.remove('collapsed');
         body.style.transition = `max-height ${ANIM_MS}ms ease, opacity ${ANIM_MS}ms ease`;
         body.style.opacity = '1';
-        // Set to computed content height
         body.style.maxHeight = body.scrollHeight + 'px';
-      
-        // After transition, unlock to 'auto' to allow charts/tables to grow
-        const onEnd = () => {
-          body.style.maxHeight = 'none';
-          body.removeEventListener('transitionend', onEnd);
-        };
+        const onEnd = () => { body.style.maxHeight = 'none'; body.removeEventListener('transitionend', onEnd); };
         body.addEventListener('transitionend', onEnd);
       }
-      
-      // Collapse one tile's body smoothly
       function closeTile(tile) {
-        const body = tile.querySelector('.tile-body');
-        if (!body) return;
-        tile.classList.remove('active');
-        tile.classList.add('collapsed');
-      
-        // If currently 'none', set to pixel height first
-        if (body.style.maxHeight === '' || body.style.maxHeight === 'none') {
-          body.style.maxHeight = body.scrollHeight + 'px';
-        }
-        // force reflow
+        const body = tile.querySelector('.tile-body'); if (!body) return;
+        tile.classList.remove('active'); tile.classList.add('collapsed');
+        if (body.style.maxHeight === '' || body.style.maxHeight === 'none') { body.style.maxHeight = body.scrollHeight + 'px'; }
         void body.offsetHeight;
-      
         body.style.transition = `max-height ${ANIM_MS}ms ease, opacity ${ANIM_MS}ms ease`;
         body.style.opacity = '0';
         body.style.maxHeight = '0px';
       }
-      
-      // Activate a set of tiles (keep multiple open), collapse the rest
       function activateTiles(tileNames) {
         const wanted = new Set(tileNames);
         document.querySelectorAll('.tile').forEach(tile => {
@@ -573,61 +383,20 @@
         });
         ACTIVE = tileNames[0] || ACTIVE;
       }
-      
-      // Optional: single-tile focus (kept for header clicks)
-      function focusTile(name) {
-        activateTiles([name]);
-      }
+      function focusTile(name) { activateTiles([name]); }
 
-      function expandTile(tile) {
-        const body = tile.querySelector('.tile-body');
-        if (!body) return;
-        body.style.maxHeight = body.scrollHeight + "px";
-        body.style.opacity = "1";
-      }
-      
-      function collapseTile(tile) {
-        const body = tile.querySelector('.tile-body');
-        if (!body) return;
-        body.style.maxHeight = "0";
-        body.style.opacity = "0";
-      }
-      
-      // Overwrite focusTile() with smooth expand/collapse
-      function focusTile(name) {
-        ACTIVE = name;
-        document.querySelectorAll('.tile').forEach(t => {
-          const key = t.getAttribute('data-tile');
-          const body = t.querySelector('.tile-body');
-          const isActive = (key === name);
-      
-          if (isActive) {
-            t.classList.add('active');
-            t.classList.remove('collapsed');
-            expandTile(t);
-          } else {
-            t.classList.remove('active');
-            t.classList.add('collapsed');
-            collapseTile(t);
-          }
+      // Tile header click binding
+      document.querySelectorAll('.tile-head').forEach(head => {
+        head.addEventListener('click', () => {
+          const tile = head.closest('.tile');
+          const name = tile.getAttribute('data-tile');
+          focusTile(name);
+          setTimeout(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} }, ANIM_MS + 50);
         });
-      }
-   
+      });
 
       /****************************************************
-       *  FETCH HELPER
-       ****************************************************/
-      async function fetchJSON(url, options) {
-        const res = await fetch(url, options);
-        const text = await res.text();
-        let data = null;
-        try { data = JSON.parse(text); } catch {}
-        if (!res.ok) throw new Error((data && data.detail) || text);
-        return data;
-      }
-
-      /****************************************************
-       *  ASK SECTION — handles user queries
+       *  ASK TILE
        ****************************************************/
       async function doAsk() {
         focusTile('ask');
@@ -642,34 +411,72 @@
           });
           renderAnswer(data);
           el('status').textContent = 'Done';
+          el('kpi-lastQuery').textContent = q ? (q.length>24 ? q.slice(0,24)+'…' : q) : '—';
         } catch (e) {
           el('status').textContent = 'Error';
-          el('answer').innerHTML = `<div class="card">⚠️ ${e.message}</div>`;
+          el('answer').innerHTML = `<div class="card">⚠️ ${sanitize(e.message)}</div>`;
         }
       }
-
       el('askBtn').addEventListener('click', doAsk);
       document.querySelectorAll('#suggested-prompts button').forEach(btn => {
         btn.addEventListener('click', () => { el('q').value = btn.textContent; doAsk(); });
       });
 
-      function renderAnswer(data) {
+      function renderAnswer(payload) {
         HAS_RESULT = true;
-        const ans = data.answer || data.output || data.message || "No answer provided.";
-        el('answer').innerHTML = `<div class="card fade-in">${ans}</div>`;
-        el('raw').textContent = JSON.stringify(data, null, 2);
-      
-        // Open Ask and Result together (satellite view)
+        const ans = String(payload.answer ?? payload.Answer ?? payload.output ?? payload.message ?? '').trim();
+        el('answer').innerHTML = ans
+          ? `<div class="card fade-in">${sanitize(ans)}</div>`
+          : `<div class="card">No answer in response.</div>`;
+        el('raw').textContent = JSON.stringify(payload, null, 2);
+
+        // Citations
+        const citations = safeArray(payload.citations || payload.Citations);
+        const citesUL = el('citations'); citesUL.innerHTML = '';
+        if (!citations.length) {
+          citesUL.innerHTML = `<li class="small">None</li>`;
+        } else {
+          citations.forEach(c => {
+            const grades = Array.isArray(c.allowed_grades) ? ` <span class="chip">grades: ${c.allowed_grades.join(', ')}</span>` : '';
+            const vis = visibilityBadge(c.visibility);
+            const title = c.title ? ` — ${sanitize(c.title)}` : '';
+            const sec = c.section ? ` — ${sanitize(c.section)}` : '';
+            const li = document.createElement('li');
+            li.innerHTML = `<code>[${sanitize(c.policy_id)}/${sanitize(c.clause_id)}]</code>${title}${sec} ${vis}${grades}`;
+            citesUL.appendChild(li);
+          });
+        }
+
+        // Highlights
+        const highlights = safeArray(payload.highlights || payload.Highlights);
+        const hiUL = el('highlights'); hiUL.innerHTML = '';
+        if (!highlights.length) {
+          hiUL.innerHTML = `<li class="small">None</li>`;
+        } else {
+          highlights.forEach(h => {
+            const key = `[${sanitize(h.policy_id)}/${sanitize(h.clause_id)}]`;
+            const snip = sanitize(h.snippet || '');
+            const li = document.createElement('li');
+            li.innerHTML = `
+              <div class="row" style="justify-content:space-between; align-items:flex-start;">
+                <div>
+                  <div><code>${key}</code></div>
+                  <div class="small" style="margin-top:4px">${snip}</div>
+                </div>
+              </div>`;
+            hiUL.appendChild(li);
+          });
+        }
+
+        // Open Ask + Result
         activateTiles(['ask', 'result']);
       }
 
-
       /****************************************************
-       *  RULE TILE — Suggest + Apply YAML rules
+       *  RULES TILE
        ****************************************************/
       async function doSuggestRule() {
-        const status = el('ruleStatus');
-        const preview = el('rulePreview');
+        const status = el('ruleStatus'); const preview = el('rulePreview');
         status.textContent = 'Generating…';
         const payload = {
           prompt: el('rulePrompt').value.trim(),
@@ -690,7 +497,6 @@
           status.textContent = `Error: ${e.message}`;
         }
       }
-
       async function doApplyRule() {
         const yaml = el('rulePreview').textContent.trim();
         if (!yaml) return (el('ruleStatus').textContent = 'No YAML to apply.');
@@ -705,12 +511,11 @@
           el('ruleStatus').textContent = `Error: ${e.message}`;
         }
       }
-
       el('btnSuggest').addEventListener('click', doSuggestRule);
       el('btnApply').addEventListener('click', doApplyRule);
 
       /****************************************************
-       *  DETECT & NARRATE TILE
+       *  DETECT & NARRATE
        ****************************************************/
       async function doAnalyze() {
         focusTile('detect');
@@ -719,45 +524,44 @@
         el('an_narr').style.display = 'none';
         const q = el('an_q').value.trim() || null;
         const top = Number(el('an_top').value || 50);
+
         try {
-              const data = await fetchJSON(`${API}/analyze`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: q, top })
-              });
-            
-              ANOMALIES = Array.isArray(data.anomalies) ? data.anomalies : [];
-              renderAnomalies(ANOMALIES);
-              el('an_status').textContent = `Detected ${ANOMALIES.length} anomalies`;
-            
-              // Open BOTH tiles so table is visible and analytics render
-              activateTiles(['detect', 'analytics']);
-            
-              // Render charts AFTER expansion so canvases size correctly
-              setTimeout(() => {
-                renderAnalytics(ANOMALIES);
-                // safety: resize after first paint
-                setTimeout(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} }, 60);
-              }, ANIM_MS + 30);
-            
-            } catch (e) {
-              el('an_status').textContent = `Error: ${e.message}`;
-            }
+          const data = await fetchJSON(`${API}/analyze`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q, top })
+          });
 
+          ANOMALIES = Array.isArray(data.anomalies) ? data.anomalies : [];
+          renderAnomalies(ANOMALIES);
+          el('an_status').textContent = `Detected ${ANOMALIES.length} anomalies`;
+
+          // Open Detect + Analytics together for dual view
+          activateTiles(['detect', 'analytics']);
+
+          // Render analytics after expansion to size canvases correctly
+          setTimeout(() => {
+            renderAnalytics(ANOMALIES);
+            setTimeout(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} }, 60);
+          }, ANIM_MS + 30);
+
+        } catch (e) {
+          el('an_status').textContent = `Error: ${e.message}`;
+        }
       }
-
       el('btnAnalyze').addEventListener('click', doAnalyze);
 
       function renderAnomalies(rows) {
-        const body = el('an_body');
-        body.innerHTML = '';
+        el('kpi-anom').textContent = `anom ${rows.length || 0}`;
+        const body = el('an_body'); body.innerHTML = '';
         rows.forEach((a, i) => {
           const tr = document.createElement('tr');
+          const cls = a.risk_score > 70 ? 'bad' : a.risk_score < 40 ? 'ok' : 'warn';
           tr.innerHTML = `
             <td><input type="checkbox" class="an_sel" data-i="${i}" /></td>
-            <td><code>${a.event_id}</code></td>
-            <td>${(a.signals || []).join(', ')}</td>
-            <td><span class="chip ${a.risk_score > 70 ? 'bad' : a.risk_score < 40 ? 'ok' : 'warn'}">${a.risk_score}</span></td>
-            <td class="small">${a.explain || ''}</td>`;
+            <td><code>${sanitize(a.event_id)}</code></td>
+            <td>${sanitize((a.signals || []).join(', '))}</td>
+            <td><span class="chip ${cls}">${a.risk_score ?? 0}</span></td>
+            <td class="small">${sanitize(a.explain || '')}</td>`;
           body.appendChild(tr);
         });
         el('an_results').style.display = rows.length ? 'block' : 'none';
@@ -766,118 +570,159 @@
 
       async function doNarrateSelected() {
         const selected = Array.from(document.querySelectorAll('.an_sel:checked')).map(cb => {
-          const i = Number(cb.getAttribute('data-i'));
-          return ANOMALIES[i];
+          const i = Number(cb.getAttribute('data-i')); return ANOMALIES[i];
         });
         if (!selected.length) return;
+
         const items = selected.map(a => ({ event_id: a.event_id, signals: a.signals || [], risk_score: a.risk_score }));
         try {
           const data = await fetchJSON(`${API}/narrative/from_anomalies`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ items })
           });
-          const ul = el('an_narr_list');
-          ul.innerHTML = '';
+
+          const ul = el('an_narr_list'); ul.innerHTML = '';
           (data.items || []).forEach(n => {
+            const rem = (n.remediation || []).map(r => `<li>${sanitize(r)}</li>`).join('');
+            const pol = safeArray(n.linked_policies).map(p => {
+              const chip = `<code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code>`;
+              const meta = [p.title ? sanitize(p.title) : null, p.section ? sanitize(p.section) : null].filter(Boolean).join(" — ");
+              const head = meta ? `${chip} <span class="small">— ${meta}</span>` : chip;
+              const cite = p.clause_text ? `<div class="small" style="margin-top:4px;opacity:.85;">“${sanitize(p.clause_text)}”</div>` : "";
+              return `<div style="margin:6px 0;">${head}${cite}</div>`;
+            }).join('');
+
             const li = document.createElement('li');
             li.innerHTML = `
               <div class="card">
-                <div><strong>Event:</strong> <code>${n.event_id}</code></div>
-                <div style="margin-top:4px;">${n.narrative}</div>
-                <div style="margin-top:6px;">
-                  <span class="small">Remediation:</span>
-                  <ul>${(n.remediation || []).map(r => `<li>${r}</li>`).join('')}</ul>
+                <div class="row" style="justify-content:space-between;">
+                  <div><strong>Event:</strong> <code>${sanitize(n.event_id)}</code></div>
+                  <div class="chip">${pol || 'no linked policies'}</div>
+                </div>
+                <div style="margin-top:6px;">${sanitize(n.narrative || '')}</div>
+                <div style="margin-top:8px;">
+                  <div class="small" style="opacity:.8;margin-bottom:4px;">Remediation</div>
+                  <ul style="margin:0 0 0 1.1rem;">${rem}</ul>
                 </div>
               </div>`;
             ul.appendChild(li);
           });
+
+          // Reveal narratives and ensure Detect is open/expanded
           el('an_narr').style.display = 'block';
+          const detectTile = el('tile-detect');
+          openTile(detectTile);
+          // Keep dual view
+          activateTiles(['detect', 'analytics']);
+          // Scroll into view
+          setTimeout(() => { el('an_narr').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, ANIM_MS + 50);
+
         } catch (e) {
-          el('an_narr_list').innerHTML = `<li class="small">Error: ${e.message}</li>`;
+          el('an_narr_list').innerHTML = `<li class="small">Error: ${sanitize(e.message)}</li>`;
           el('an_narr').style.display = 'block';
+          openTile(el('tile-detect'));
         }
       }
-
       el('btnNarrate').addEventListener('click', doNarrateSelected);
 
       /****************************************************
-       *  SLIDER LOGIC — YEAR / MONTH / DAY
+       *  SLIDERS — label
        ****************************************************/
       function updateDateLabel() {
         const y = el('yearSlider').value, m = el('monthSlider').value, d = el('daySlider').value;
-        el('sliderDateLabel').textContent = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        el('sliderDateLabel').textContent = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       }
-      ['yearSlider', 'monthSlider', 'daySlider'].forEach(id => {
-        el(id).addEventListener('input', updateDateLabel);
-      });
+      ['yearSlider','monthSlider','daySlider'].forEach(id => el(id).addEventListener('input', updateDateLabel));
       updateDateLabel();
 
       /****************************************************
-       *  ANALYTICS — Charts + Heatmap
+       *  ANALYTICS — compact charts + heatmap
        ****************************************************/
-      let chartLine, chartBar;
-
-      function renderAnalytics(data) {
+      function renderAnalytics(anomalies) {
         const analyticsTile = document.getElementById('tile-analytics');
-        if (!analyticsTile || analyticsTile.classList.contains('collapsed')) return; // wait until open
+        if (!analyticsTile || analyticsTile.classList.contains('collapsed')) return;
 
-        focusTile('analytics');
+        const xLabels = anomalies.map((_, i) => `#${i + 1}`);
+        const risks = anomalies.map(a => a.risk_score || 0);
+        const signalsCount = anomalies.map(a => (a.signals || []).length);
 
-        // Compute synthetic data from anomalies
-        const xLabels = data.map((_, i) => `#${i + 1}`);
-        const risks = data.map(a => a.risk_score || 0);
-        const signalsCount = data.map(a => (a.signals || []).length);
-
-        // --- Line Chart (Risk Trend) ---
-        const ctx1 = el('analytics-chart');
+        // Line — Risk
+        const ctx1 = document.getElementById('analytics-chart');
         if (chartLine) chartLine.destroy();
         chartLine = new Chart(ctx1, {
           type: 'line',
           data: {
             labels: xLabels,
             datasets: [{
-              label: 'Risk Score Trend',
+              label: 'Risk',
               data: risks,
               borderColor: '#1976d2',
-              backgroundColor: 'rgba(25,118,210,0.1)',
-              tension: 0.3,
+              backgroundColor: 'rgba(25,118,210,0.12)',
+              tension: 0.35,
               fill: true,
+              pointRadius: 2,
+              pointHoverRadius: 4
             }]
           },
           options: {
-            responsive: true,
-            animation: { duration: 800, easing: 'easeOutQuad' },
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true, max: 100 } }
+            responsive: true, maintainAspectRatio: false,
+            animation: { duration: 600, easing: 'easeOutQuad' },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                intersect: false,
+                callbacks: {
+                  label: (ctx) => {
+                    const i = ctx.dataIndex, a = anomalies[i];
+                    const sigs = (a.signals || []).join(', ') || '—';
+                    const expl = (a.explain || '').slice(0, 80) + ((a.explain || '').length > 80 ? '…' : '');
+                    return [`Risk: ${a.risk_score}`, `Signals: ${sigs}`, `Event: ${a.event_id}`, `Explain: ${expl}`];
+                  },
+                  title: (items) => `Event ${items[0].label}`
+                }
+              }
+            },
+            scales: {
+              y: { beginAtZero: true, max: 100, title: { display: true, text: 'Risk' } },
+              x: { title: { display: true, text: 'Events (index)' } }
+            }
           }
         });
 
-        // --- Bar Chart (Signal Count vs Risk) ---
-        const ctx2 = el('analytics-bar');
+        // Bar — Signals per Event
+        const ctx2 = document.getElementById('analytics-bar');
         if (chartBar) chartBar.destroy();
         chartBar = new Chart(ctx2, {
           type: 'bar',
-          data: {
-            labels: xLabels,
-            datasets: [{
-              label: 'Signals per Event',
-              data: signalsCount,
-              backgroundColor: 'rgba(229,57,53,0.7)'
-            }]
-          },
+          data: { labels: xLabels, datasets: [{ label: 'Signals', data: signalsCount, backgroundColor: 'rgba(229,57,53,0.75)' }] },
           options: {
-            responsive: true,
-            animation: { duration: 700, easing: 'easeOutCubic' },
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true } }
+            responsive: true, maintainAspectRatio: false,
+            animation: { duration: 500, easing: 'easeOutCubic' },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => {
+                    const i = ctx.dataIndex, a = anomalies[i];
+                    const sigs = (a.signals || []).join(', ') || '—';
+                    return [`Signals: ${signalsCount[i]}`, `List: ${sigs}`];
+                  },
+                  title: (items) => `Event ${items[0].label}`
+                }
+              }
+            },
+            scales: {
+              y: { beginAtZero: true, title: { display: true, text: 'Signals Count' } },
+              x: { title: { display: true, text: 'Events (index)' } }
+            }
           }
         });
 
-        // --- Heatmap (Signal × Risk) ---
-        renderHeatmap(data);
-        requestAnimationFrame(() => {
-          try { chartLine?.resize(); chartBar?.resize(); } catch (_) {}
-        });
+        // Heatmap
+        renderHeatmap(anomalies);
+
+        // Final sizing after animations
+        requestAnimationFrame(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} });
       }
 
       function renderHeatmap(data) {
@@ -885,12 +730,10 @@
         container.html('');
         const width = container.node().clientWidth;
         const height = container.node().clientHeight;
-        const svg = container.append('svg')
-          .attr('width', width)
-          .attr('height', height);
+        const svg = container.append('svg').attr('width', width).attr('height', height);
 
         const cols = 10;
-        const rows = Math.ceil(data.length / cols);
+        const rows = Math.max(1, Math.ceil(data.length / cols));
         const cellW = width / cols;
         const cellH = height / rows;
 
@@ -900,42 +743,18 @@
           .append('rect')
           .attr('x', (_, i) => (i % cols) * cellW)
           .attr('y', (_, i) => Math.floor(i / cols) * cellH)
-          .attr('width', cellW - 2)
-          .attr('height', cellH - 2)
-          .attr('rx', 3)
-          .attr('ry', 3)
+          .attr('width', Math.max(0, cellW - 2))
+          .attr('height', Math.max(0, cellH - 2))
+          .attr('rx', 3).attr('ry', 3)
           .attr('fill', d => d3.interpolateRdYlBu(1 - (d.risk_score || 0) / 100))
           .attr('opacity', 0)
-          .transition()
-          .duration(400)
-          .delay((_, i) => i * 15)
-          .attr('opacity', 1);
+          .transition().duration(400).delay((_, i) => i * 15).attr('opacity', 1);
       }
 
-      // Re-trigger fade animation when focusing tiles
-      function reanimateTiles() {
-        document.querySelectorAll('.tile').forEach((t, i) => {
-          t.style.animation = 'none';
-          void t.offsetWidth; // force reflow
-          t.style.animation = `tilePopIn 0.5s ease forwards ${i * 0.1}s`;
-        });
-      }
-      focusTile('ask');
-      reanimateTiles();
-      document.querySelectorAll('.tile-head').forEach(head => {
-        head.addEventListener('click', () => {
-          const tile = head.closest('.tile');
-          const name = tile.getAttribute('data-tile');
-          focusTile(name);
-          // if charts are visible after opening analytics, ensure they resize
-          setTimeout(() => { try { chartLine?.resize(); chartBar?.resize(); } catch(_){} }, ANIM_MS + 50);
-        });
-      });
-
+      /****************************************************
+       *  INIT — open Ask by default
+       ****************************************************/
+       activateTiles(['ask']); // ensure Ask open with JS-driven height
     </script>
   </body>
 </html>
-
-
-
-
