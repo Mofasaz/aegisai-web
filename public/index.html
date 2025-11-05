@@ -235,6 +235,33 @@
         align-items: center;
       }
 
+      /* ===== Badges layout ===== */
+      .badges { 
+        display: block; 
+      }
+      .badges-primary {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;         /* keeps the first line neat on small screens */
+        align-items: center;
+      }
+      .badges-line {
+        margin-top: 6px;         /* 1 row per extra badge line */
+      }
+      .badges-line .chip {
+        display: inline-flex;
+      }
+      
+      /* ===== Narrative paragraphs ===== */
+      .narr-p {
+        margin: 8px 0 0 0; 
+        line-height: 1.45;
+        color: var(--text);
+      }
+      .narr-p strong {
+        color: var(--accent);
+      }
+
     </style>
   </head>
 
@@ -385,49 +412,42 @@
       function pct(n) { return (typeof n === 'number') ? Math.round(n * 100) : null; }
 
       function confidenceBadge(conf) {
-        const p = pct(conf);
-        if (p === null) return '';
+        const p = pct(conf); if (p === null) return '';
         const cls = p >= 80 ? 'ok' : (p < 50 ? 'bad' : 'warn');
         return `<span class="chip ${cls}">Confidence: ${p}%</span>`;
       }
-      
       function judgeScoreBadge(score) {
-        const p = pct(score);
-        if (p === null) return '';
+        const p = pct(score); if (p === null) return '';
         const cls = p >= 80 ? 'ok' : (p < 50 ? 'bad' : 'warn');
         return `<span class="chip ${cls}">Judge: ${p}%</span>`;
       }
-      
+      function idBadge(id) {
+        return id ? `<span class="chip">Corr: ${sanitize(String(id)).slice(0,8)}</span>` : '';
+      }
+      function restrictedProbeBadge(flag) { return flag ? `<span class="chip bad">Restricted Probe</span>` : ''; }
       function reasonsBadge(reasons) {
         const arr = safeArray(reasons);
         return arr.length ? `<span class="chip warn">Reasons: ${arr.join('; ')}</span>` : '';
       }
       
-      function idBadge(id) {
-        return id ? `<span class="chip">Corr: ${sanitize(String(id)).slice(0,8)}</span>` : '';
-      }
-      
-      function issuesBadges(issues) {
-        const arr = safeArray(issues);
-        return arr.map(code => `<span class="chip warn">${sanitize(code)}</span>`).join('');
-      }
-      
-      function restrictedProbeBadge(flag) {
-        return flag ? `<span class="chip bad">Restricted Probe</span>` : '';
-      }
-      
+      /* NEW: return HTML with a primary (single line) row + each extra as its own row */
       function renderBadges(payload) {
-        const bits = [
+        const primaryHTML = [
           confidenceBadge(payload.confidence),
           judgeScoreBadge(payload.judge_score),
-          restrictedProbeBadge(payload.restricted_probe),
-          reasonsBadge(payload.risk_reasons),
-          idBadge(payload.correlation_id),
-          issuesBadges(payload.judge_issues)
-        ].filter(Boolean);
-        return bits.join(' ');
+          idBadge(payload.correlation_id)
+        ].filter(Boolean).join('');
+      
+        const lines = [];
+        if (payload.restricted_probe) lines.push(restrictedProbeBadge(true));
+        if (safeArray(payload.risk_reasons).length) lines.push(reasonsBadge(payload.risk_reasons));
+        safeArray(payload.judge_issues).forEach(code => {
+          lines.push(`<span class="chip warn">${sanitize(code)}</span>`);
+        });
+      
+        const extraRows = lines.map(chip => `<div class="badges-line">${chip}</div>`).join('');
+        return `<div class="badges-primary">${primaryHTML}</div>${extraRows}`;
       }
-
 
       /****************************************************
        *  TILE OPEN/CLOSE (smooth, unclipped)
@@ -705,27 +725,24 @@
 
           const ul = el('an_narr_list'); ul.innerHTML = '';
           (data.items || []).forEach(n => {
-            const rem = (n.remediation || []).map(r => `<li>${sanitize(r)}</li>`).join('');
-            const pol = safeArray(n.linked_policies).map(p => {
-              const chip = `<code>[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]</code>`;
-              const meta = [p.title ? sanitize(p.title) : null, p.section ? sanitize(p.section) : null].filter(Boolean).join(" — ");
-              const head = meta ? `${chip} <span class="small">— ${meta}</span>` : chip;
-              const cite = p.clause_text ? `<div class="small" style="margin-top:4px;opacity:.85;">“${sanitize(p.clause_text)}”</div>` : "";
-              return `<div style="margin:6px 0;">${head}${cite}</div>`;
-            }).join('');
-
+            // Build Policy paragraph text
+            const policiesText = safeArray(n.linked_policies).map(p => {
+              const id = `[${sanitize(p.policy_id)}/${sanitize(p.clause_id)}]`;
+              const meta = [p.title ? sanitize(p.title) : null, p.section ? sanitize(p.section) : null]
+                .filter(Boolean).join(' — ');
+              const clause = p.clause_text ? ` — “${sanitize(p.clause_text)}”` : '';
+              return `${id}${meta ? ' — ' + meta : ''}${clause}`;
+            }).join('; ') || '—';
+          
+            // Build Remediation paragraph text
+            const remText = safeArray(n.remediation).join('; ') || '—';
+          
             const li = document.createElement('li');
             li.innerHTML = `
               <div class="card">
-                <div class="row" style="justify-content:space-between;">
-                  <div><strong>Event:</strong> <code>${sanitize(n.event_id)}</code></div>
-                  <div class="chip">${pol || 'no linked policies'}</div>
-                </div>
-                <div style="margin-top:6px;">${sanitize(n.narrative || '')}</div>
-                <div style="margin-top:8px;">
-                  <div class="small" style="opacity:.8;margin-bottom:4px;">Remediation</div>
-                  <ul style="margin:0 0 0 1.1rem;">${rem}</ul>
-                </div>
+                <p class="narr-p"><strong>Event:</strong> <code>${sanitize(n.event_id)}</code></p>
+                <p class="narr-p"><strong>Policy:</strong> ${policiesText}</p>
+                <p class="narr-p"><strong>Remediation:</strong> ${sanitize(remText)}</p>
               </div>`;
             ul.appendChild(li);
           });
@@ -762,4 +779,5 @@
     </script>
   </body>
 </html>
+
 
