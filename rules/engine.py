@@ -2,76 +2,188 @@ from typing import List, Dict, Any, Tuple
 from api.models import LogEvent, Anomaly
 import yaml, re, threading, hashlib
 from datetime import datetime
-from ruamel.yaml import YAML
-_yaml = YAML(typ="safe")
 
 # Global cache + lock
 _RULES_CACHE: List[Dict[str, Any]] = []
 _LOCK = threading.RLock()
+ALLOW_WORDS = ("permit", "permitted", "allowed", "allow", "authorised", "authorized")
+DENY_WORDS  = ("forbid", "forbidden", "prohibit", "prohibited", "deny", "blocked", "not allowed")
 
-def _canonical_rule(yaml_text: str) -> Tuple[dict, str]:
-    """
-    Returns (rule_dict, canonical_fingerprint).
-    We sort keys, normalize lists, and hash only the meaningful parts
-    so near-identical YAMLs map to the same fingerprint.
-    """
-    doc = _yaml.load(yaml_text) or {}
-    if not isinstance(doc, dict):
-        return {}, ""
 
-    # Keep only meaningful keys for dedupe/conflict checks
-    keep = {k: doc.get(k) for k in ("name", "category", "severity", "effect", "where", "then")}
-    # Normalize:
-    def _norm(x):
-        if isinstance(x, dict):
-            return {k: _norm(x[k]) for k in sorted(x)}
-        if isinstance(x, list):
-            return sorted((_norm(i) for i in x), key=lambda v: str(v))
-        return x
-    canon = _norm(keep)
+def _normalize_rule_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Light canonicalization so comparisons are stable."""
+    out = dict(d)
+    # Normalize strings
+    for k, v in list(out.items()):
+        if isinstance(v, str):
+            out[k] = v.strip()
+        elif isinstance(v, list):
+            # de-dupe lists of strings while preserving order
+            if all(isinstance(x, str) for x in v):
+                out[k] = list(dict.fromkeys([x.strip() for x in v]))
+    # Lowercase some common fields for matching
+    for k in ("category", "action", "role", "system", "resource"):
+        if k in out and isinstance(out[k], str):
+            out[k] = out[k].strip()
+    return out
 
-    # Fingerprint uses only effect + where predicates
-    fp_src = {"effect": canon.get("effect"), "where": canon.get("where")}
-    fp = hashlib.sha256(str(fp_src).encode("utf-8")).hexdigest()
-    return canon, fp
 
-def _predicates_overlap(a_where: dict, b_where: dict) -> bool:
+def _rule_signature(d: Dict[str, Any]) -> Tuple:
     """
-    Heuristic: treat “overlap” as all shared keys compatible.
-    - Exact string equality matches
-    - Lists: any intersection
-    - Missing key in either → assume overlap (conservative)
+    A coarse signature to spot duplicates near-identically scoped rules.
+    Adjust the keys to match your schema.
     """
-    if not isinstance(a_where, dict) or not isinstance(b_where, dict):
-        return False
-    keys = set(a_where.keys()) & set(b_where.keys())
-    for k in keys:
-        av, bv = a_where.get(k), b_where.get(k)
-        if isinstance(av, list) or isinstance(bv, list):
-            aset = set(av if isinstance(av, list) else [av])
-            bset = set(bv if isinstance(bv, list) else [bv])
-            if not (aset & bset):
-                return False
+    keys = ("category", "role", "system", "resource", "action")
+    sig = tuple((k, (d.get(k) or "") if isinstance(d.get(k), str) else tuple(d.get(k) or [])) for k in keys)
+    # also include any simple ‘when’ conditions you use (e.g., status/time windows)
+    conds = d.get("when") or {}
+    # compress ‘when’ to stable pairs (only simple equals / lists considered)
+    flat = []
+    for k, v in sorted(conds.items()):
+        if isinstance(v, list):
+            flat.append((k, tuple(sorted(v))))
         else:
-            if av is not None and bv is not None and str(av) != str(bv):
-                return False
-    return True
+            flat.append((k, v))
+    return ("sig", sig, tuple(flat))
 
 
-def _effect_opposes(a: str, b: str) -> bool:
-    a = (a or "").lower()
-    b = (b or "").lower()
-    denyish   = {"deny","block","flag_high","escalate"}
-    allowish  = {"allow","permit"}
-    if (a in denyish and b in allowish) or (b in denyish and a in allowish):
-        return True
-    return False
+def _similar_rule(existing: Dict[str, Any], new: Dict[str, Any]) -> bool:
+    """Duplicate if signatures match exactly."""
+    return _rule_signature(existing) == _rule_signature(new)
 
-def _iter_active_rules():
-    # Replace with your store: DB, file, or in-memory list
-    for r in ACTIVE_RULES:
-        # each r is a dict with fields similar to suggested YAML
-        yield r
+
+def _contradict_rule(existing: Dict[str, Any], new: Dict[str, Any]) -> bool:
+    """
+    Naive contradiction detector:
+      - same scope (role/system/resource/action)
+      - one 'effect' says allow/permit while the other says deny/block/flag high severity
+    Tune based on your schema: effect, decision, severity, action_on_violation, etc.
+    """
+    scope_keys = ("role", "system", "resource", "action")
+    same_scope = all((existing.get(k) or "") == (new.get(k) or "") for k in scope_keys)
+
+    def _effect(d: Dict[str, Any]) -> str:
+        # try explicit effect/decision fields first; fallback to severity/action_on_violation text
+        for key in ("effect", "decision"):
+            if key in d and isinstance(d[key], str):
+                return d[key].strip().lower()
+        text = " ".join(str(d.get(k, "")) for k in ("severity", "action_on_violation", "note", "description"))
+        t = text.lower()
+        if any(w in t for w in DENY_WORDS):
+            return "deny"
+        if any(w in t for w in ALLOW_WORDS):
+            return "allow"
+        # If severity very low and action is "log only", treat as allow-ish
+        if "log only" in t or "informational" in t:
+            return "allowish"
+        return "unknown"
+
+    return same_scope and { _effect(existing), _effect(new) } == {"allow", "deny"}
+
+
+def _validate_against_existing(new_rule: Dict[str, Any], existing_rules: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
+    """
+    Returns (errors, warnings) about duplicates or conflicts vs. existing rules.
+    """
+    errs, warns = [], []
+    new_id = (new_rule.get("id") or "").strip()
+    if new_id and any((r.get("id") or "").strip() == new_id for r in existing_rules):
+        errs.append(f"Rule id '{new_id}' already exists.")
+
+    for r in existing_rules:
+        if _similar_rule(r, new_rule):
+            warns.append(f"Possible duplicate of existing rule '{r.get('id') or r.get('name') or 'unknown'}' (same scope/conditions).")
+        elif _contradict_rule(r, new_rule):
+            errs.append(f"New rule appears to contradict existing rule '{r.get('id') or r.get('name') or 'unknown'}' for the same scope.")
+
+    # De-dupe messages (preserve order)
+    errs = list(dict.fromkeys(errs))
+    warns = list(dict.fromkeys(warns))
+    return errs, warns
+
+
+def _policy_sanity_check(new_rule: Dict[str, Any], role: str | None) -> Tuple[List[str], List[str]]:
+    """
+    Deterministic (no LLM) sanity pass: if nearby clauses strongly 'permit' something
+    the rule tries to 'deny', raise a warning/error. Vice-versa too.
+    """
+    errs, warns = [], []
+    q_terms = [new_rule.get("action"), new_rule.get("system"), new_rule.get("resource"), new_rule.get("category")]
+    q = " ".join([t for t in q_terms if t]).strip()
+    if not q:
+        return errs, warns
+
+    clauses = _load_policy_clauses_for_query(q, role)
+    if not clauses:
+        warns.append("No related policies found for this scope; please review.")
+        return errs, list(dict.fromkeys(warns))
+
+    # compress clauses text
+    texts = []
+    for c in clauses:
+        txt = (c.get("clause_text") or c.get("content") or "").strip()
+        if txt:
+            texts.append(txt.lower())
+
+    combined = " \n".join(texts)
+    rule_text = " ".join(str(new_rule.get(k, "")) for k in ("effect", "decision", "severity", "action_on_violation", "description")).lower()
+
+    policy_allows = any(w in combined for w in ALLOW_WORDS)
+    policy_denies  = any(w in combined for w in DENY_WORDS)
+
+    rule_is_denyish  = any(w in rule_text for w in DENY_WORDS) or ("high" in rule_text and "block" in rule_text)
+    rule_is_allowish = any(w in rule_text for w in ALLOW_WORDS) or ("log only" in rule_text)
+
+    if policy_allows and rule_is_denyish:
+        errs.append("Policy clauses appear to permit this behavior, but the suggested rule would deny/block it.")
+    if policy_denies and rule_is_allowish:
+        warns.append("Policy clauses appear to prohibit this behavior, but the suggested rule is weak (allow/log). Consider raising severity.")
+
+    return list(dict.fromkeys(errs)), list(dict.fromkeys(warns))
+
+
+# Optional: stronger (LLM) check—off by default
+ENABLE_LLM_POLICY_CHECK = False
+
+def _llm_policy_conflict_check(rule_yaml: str, clauses: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
+    """
+    If you want a secondary LLM gate. Returns (errors, warnings).
+    """
+    if not ENABLE_LLM_POLICY_CHECK:
+        return [], []
+    policy_blob = "\n\n".join((c.get("clause_text") or c.get("content") or "").strip() for c in clauses if (c.get("clause_text") or c.get("content")))
+    if not policy_blob.strip():
+        return [], []
+
+    prompt = f"""You are a compliance validator.
+Rule (YAML):
+---
+{rule_yaml}
+---
+
+Policy excerpts:
+---
+{policy_blob[:8000]}
+---
+
+Tasks:
+1) Say "ERROR:" if the rule contradicts the policy (policy allows but rule denies, or policy forbids but rule allows).
+2) Say "WARNING:" if the rule duplicates an already typical control or seems redundant.
+3) Otherwise say "OK".
+Only return short bullet points, max 3 lines."""
+    try:
+        txt = _llm_short_check(prompt)  # implement using your chat model (NOT an embedding model)
+    except Exception:
+        return [], ["LLM policy check skipped due to runtime error."]
+
+    errs, warns = [], []
+    for line in txt.splitlines():
+        l = line.strip()
+        if l.lower().startswith("error"):
+            errs.append(l)
+        elif l.lower().startswith("warning"):
+            warns.append(l)
+    return list(dict.fromkeys(errs)), list(dict.fromkeys(warns))
 
 
 def load_rules_from_file(path: str) -> List[Dict[str, Any]]:
@@ -172,6 +284,7 @@ def analyze_events(events: List[Dict[str, Any]]):
                 "explain": "Matched rules: " + ", ".join(matched_signals),
             })
     return anomalies
+
 
 
 
