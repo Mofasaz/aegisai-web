@@ -28,7 +28,7 @@ except Exception:
 
 app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
 USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
-RULES_FILE = os.getenv("RULES_FILE", "data/rules.yaml")
+RULES_FILE = os.getenv("RULES_FILE", "rules/rules.yaml")
 
 logger = logging.getLogger("aegisai.analyze")
 if not logger.handlers:
@@ -791,6 +791,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
