@@ -446,7 +446,7 @@ def suggest_rule(req: RuleSuggestRequest, user: UserPrincipal = Depends(require_
         parsed["id"] = f"R-AUTO-{uuid.uuid4().hex[:6].upper()}"
 
     # Rule vs existing rules: duplicates & contradictions
-    existing = [_normalize_rule_dict(r) for r in _load_active_rules()]
+    existing = [_normalize_rule_dict(r) for r in load_rules_from_file(RULES_FILE)]
     dup_errs, dup_warns = _validate_against_existing(parsed, existing)
 
     # Rule vs policy clauses: deterministic sanity
@@ -457,10 +457,11 @@ def suggest_rule(req: RuleSuggestRequest, user: UserPrincipal = Depends(require_
     llm_errs, llm_warns = [], []
     if ENABLE_LLM_POLICY_CHECK:
         # fetch same clauses once more so we don't re-query inside helper
-        clauses = _load_policy_clauses_for_query(
-            " ".join(filter(None, [parsed.get("action"), parsed.get("system"), parsed.get("resource"), parsed.get("category")])),
-            role_for_query
-        )
+        q = " ".join(filter(None, [parsed.get("action"), parsed.get("system"), parsed.get("resource"), parsed.get("category")]))
+        if USE_VECTOR and callable(get_chunks_vector):
+            clauses = get_chunks_vector(q, role_for_query or "", top=8, k=40, hybrid=True)
+        clauses = get_chunks(q, role_for_query or "")[:8]
+        
         rule_yaml_for_llm = yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
         le, lw = _llm_policy_conflict_check(rule_yaml_for_llm, clauses)
         llm_errs, llm_warns = le, lw
@@ -791,6 +792,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
