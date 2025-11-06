@@ -446,12 +446,12 @@ def suggest_rule(req: RuleSuggestRequest, user: UserPrincipal = Depends(require_
         parsed["id"] = f"R-AUTO-{uuid.uuid4().hex[:6].upper()}"
 
     # Rule vs existing rules: duplicates & contradictions
-    existing = [_normalize_rule_dict(r) for r in load_rules_from_file(RULES_FILE)]
-    dup_errs, dup_warns = _validate_against_existing(parsed, existing)
+    existing = [normalize_rule_dict(r) for r in load_rules_from_file(RULES_FILE)]
+    dup_errs, dup_warns = validate_against_existing(parsed, existing)
 
     # Rule vs policy clauses: deterministic sanity
     role_for_query = parsed.get("role")
-    pol_errs, pol_warns = _policy_sanity_check(parsed, role_for_query)
+    pol_errs, pol_warns = policy_sanity_check(parsed, role_for_query)
 
     # Optional LLM gate (secondary)
     llm_errs, llm_warns = [], []
@@ -463,7 +463,7 @@ def suggest_rule(req: RuleSuggestRequest, user: UserPrincipal = Depends(require_
         clauses = get_chunks(q, role_for_query or "")[:8]
         
         rule_yaml_for_llm = yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
-        le, lw = _llm_policy_conflict_check(rule_yaml_for_llm, clauses)
+        le, lw = llm_policy_conflict_check(rule_yaml_for_llm, clauses)
         llm_errs, llm_warns = le, lw
 
     # Combine messages (de-duped, order-preserving)
@@ -792,6 +792,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
