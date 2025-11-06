@@ -33,7 +33,7 @@ ENABLE_LLM_POLICY_CHECK = os.getenv("ENABLE_LLM_POLICY_CHECK", "true").lower() =
 
 # --- Violation judge helpers ---
 LOW_SIGNAL_WORDS = {"success"}  # "success" alone rarely implies a violation
-DENY_WORDS  = ("block", "failed", "failure", "timeout", "unsafe", "risk", "data_delete", "data_export", "access_denied", "unauthorized","forbid", "forbidden", "prohibit", "prohibited", "deny", "blocked", "not allowed")
+RISKY_ACTIONS  = ("block", "failed", "failure", "timeout", "unsafe", "risk", "data_delete", "data_export", "access_denied", "unauthorized","forbid", "forbidden", "prohibit", "prohibited", "deny", "blocked", "not allowed")
 
 logger = logging.getLogger("aegisai.analyze")
 if not logger.handlers:
@@ -966,6 +966,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
