@@ -289,6 +289,92 @@
       
       /* Prevent any horizontal bleed from the container */
       .card { overflow: hidden; }
+      
+      /* ===== Processing Modal ===== */
+      #taskModal { 
+        position: fixed; inset: 0; display: none; z-index: 9999;
+      }
+      #taskModal[aria-hidden="false"] { display: block; }
+      
+      .task-backdrop {
+        position: absolute; inset: 0;
+        background: rgba(14, 23, 48, 0.25);
+        backdrop-filter: blur(4px);
+      }
+      
+      .task-panel {
+        position: absolute; inset: 0;
+        display: grid; place-items: center;
+        padding: 24px;
+      }
+      .task-panel > * {
+        max-width: 420px; width: 100%;
+      }
+      
+      .task-header, .task-body {
+        background: #fff;
+        border: 1px solid var(--chip-brd);
+        border-radius: 14px;
+        box-shadow: 0 18px 48px rgba(0,0,0,.15);
+      }
+      
+      .task-header {
+        display: flex; align-items: center; gap: 12px;
+        padding: 12px 14px;
+        border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+      }
+      .task-header h3 { margin: 0; font-size: 16px; color: var(--accent); }
+      
+      .task-spinner {
+        width: 18px; height: 18px; border-radius: 50%;
+        border: 2px solid #d9e3f5; border-top-color: var(--accent);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      
+      .task-body {
+        padding: 16px 14px 18px;
+        border-top-left-radius: 0; border-top-right-radius: 0;
+      }
+      
+      .task-percent {
+        font-size: 28px; font-weight: 700; color: var(--text);
+        margin-bottom: 10px;
+      }
+      
+      .task-progress {
+        width: 100%; height: 10px; border-radius: 999px;
+        background: #edf2fb; border: 1px solid var(--chip-brd);
+        overflow: hidden;
+      }
+      .task-progress + .task-sub { margin-top: 8px; }
+      
+      .task-progress-fill {
+        height: 100%; width: 0%;
+        background: linear-gradient(90deg, var(--accent), #4ea1ff);
+        transition: width .25s ease;
+      }
+      
+      /* Indeterminate animated bar */
+      .task-progress-indeterminate {
+        position: relative;
+      }
+      .task-progress-anim {
+        position: absolute; inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(90deg, transparent, rgba(25,118,210,.25), transparent);
+        animation: indet 1.2s ease-in-out infinite;
+      }
+      @keyframes indet {
+        0% { transform: translateX(-100%); }
+        60% { transform: translateX(0%); }
+        100% { transform: translateX(100%); }
+      }
+      
+      .task-sub { color: var(--muted); }
+      
+      /* Small safety to avoid page shift while modal is open */
+      body.modal-open { overflow: hidden; }
 
     </style>
   </head>
@@ -457,6 +543,89 @@
         const arr = safeArray(reasons);
         return arr.length ? `<span class="chip warn">Reasons: ${arr.join('; ')}</span>` : '';
       }
+
+      // ===== Modal Progress Helper =====
+      const Task = (() => {
+        const modal = document.getElementById('taskModal');
+        const titleEl = document.getElementById('taskTitle');
+        const percentEl = document.getElementById('taskPercent');
+        const bar = document.getElementById('taskProgress');
+        const fill = document.getElementById('taskProgressFill');
+        const indet = document.getElementById('taskIndeterminate');
+        const subEl = document.getElementById('taskSub');
+        let timer = null;
+        let pct = 0;
+      
+        function open(label = 'Working…', opts = { determinate: false }) {
+          titleEl.textContent = label;
+          subEl.textContent = 'Please wait…';
+          pct = 0;
+          percentEl.textContent = opts.determinate ? '0%' : '';
+          fill.style.width = '0%';
+          bar.hidden = !opts.determinate;
+          indet.hidden = !!opts.determinate;
+          modal.setAttribute('aria-hidden', 'false');
+          document.body.classList.add('modal-open');
+        }
+      
+        function set(p, sub) {
+          pct = Math.max(0, Math.min(100, Math.round(p || 0)));
+          fill.style.width = pct + '%';
+          percentEl.textContent = pct + '%';
+          if (sub) subEl.textContent = sub;
+        }
+      
+        // nice staged progress for unknown durations
+        function auto(label, steps = [15, 35, 55, 75, 90], stepMs = 600, subtext) {
+          open(label, { determinate: true });
+          subEl.textContent = subtext || 'Starting…';
+          let i = 0;
+          timer && clearInterval(timer);
+          timer = setInterval(() => {
+            if (i < steps.length) { set(steps[i]); i++; }
+            else clearInterval(timer);
+          }, stepMs);
+        }
+      
+        function success(sub = 'Done') {
+          timer && clearInterval(timer);
+          set(100, sub);
+          // small delay for users to perceive completion
+          setTimeout(close, 350);
+        }
+      
+        function fail(sub = 'Something went wrong') {
+          timer && clearInterval(timer);
+          subEl.textContent = sub;
+          // flash bar red quickly for feedback
+          fill.style.background = 'linear-gradient(90deg, #d32f2f, #ef5350)';
+          percentEl.textContent = '';
+          setTimeout(close, 900);
+        }
+      
+        function close() {
+          modal.setAttribute('aria-hidden', 'true');
+          document.body.classList.remove('modal-open');
+          timer && clearInterval(timer);
+          timer = null;
+        }
+      
+        return { open, set, auto, success, fail, close };
+      })();
+      
+      // Wrapper: run a promise with staged progress
+      async function withProgress(label, fnPromiseFactory, subtext) {
+        Task.auto(label, [12, 28, 46, 68, 84, 92], 500, subtext);
+        try {
+          const res = await fnPromiseFactory();
+          Task.success();
+          return res;
+        } catch (e) {
+          Task.fail(typeof e?.message === 'string' ? e.message : 'Failed');
+          throw e;
+        }
+      }
+
       
       /* NEW: return HTML with a primary (single line) row + each extra as its own row */
       function renderBadges(payload) {
@@ -527,10 +696,13 @@
         const grade = el('grade').value.trim() || null;
         el('status').textContent = 'Asking...';
         try {
-          const data = await fetchJSON(`${API}/ask`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: q, user_grade: grade })
-          });
+          const data = await withProgress('Answering your question…', () =>
+            fetchJSON(`${API}/ask`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: q, user_grade: grade })
+            }),
+            'Retrieving policies and generating answer…'
+          );
           renderAnswer(data);
           el('status').textContent = 'Done';
           el('kpi-lastQuery').textContent = q ? (q.length>24 ? q.slice(0,24)+'…' : q) : '—';
@@ -661,10 +833,12 @@
         };
         if (!payload.prompt) return (status.textContent = 'Enter rule description');
         try {
-          const data = await fetchJSON(`${API}/rules/suggest`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
+          const data = await withProgress('Suggesting YAML…', () =>
+            fetchJSON(`${API}/rules/suggest`, {
+              method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)
+            }),
+            'Validating fields and composing rule…'
+          );
           preview.textContent = data.yaml || '';
           status.textContent = 'Suggested';
           el('btnApply').disabled = !data.yaml;
@@ -673,15 +847,18 @@
           status.textContent = `Error: ${e.message}`;
         }
       }
+      
       async function doApplyRule() {
         const yaml = el('rulePreview').textContent.trim();
         if (!yaml) return (el('ruleStatus').textContent = 'No YAML to apply.');
         el('ruleStatus').textContent = 'Saving…';
         try {
-          const data = await fetchJSON(`${API}/rules/apply`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ yaml })
-          });
+          const data = await withProgress('Saving rule…', () =>
+            fetchJSON(`${API}/rules/apply`, {
+              method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ yaml })
+            }),
+            'Persisting and reloading rules…'
+          );
           el('ruleStatus').textContent = `Saved: ${data.message || 'ok'}`;
         } catch (e) {
           el('ruleStatus').textContent = `Error: ${e.message}`;
@@ -702,10 +879,13 @@
         const top = Number(el('an_top').value || 50);
 
         try {
-          const data = await fetchJSON(`${API}/analyze`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: q, top })
-          });
+          const data = await withProgress('Analyzing signals…', () =>
+            fetchJSON(`${API}/analyze`, {
+              method:'POST', headers:{ 'Content-Type':'application/json' },
+              body: JSON.stringify({ query: q, top })
+            }),
+            'Scanning, ranking, and scoring anomalies…'
+          );
 
           ANOMALIES = Array.isArray(data.anomalies) ? data.anomalies : [];
           renderAnomalies(ANOMALIES);
@@ -746,10 +926,12 @@
 
         const items = selected.map(a => ({ event_id: a.event_id, signals: a.signals || [], risk_score: a.risk_score }));
         try {
-          const data = await fetchJSON(`${API}/narrative/from_anomalies`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items })
-          });
+           const data = await withProgress('Building narratives…', () =>
+            fetchJSON(`${API}/narrative/from_anomalies`, {
+              method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ items })
+            }),
+            'Linking policies and drafting remediations…'
+          );
 
           const ul = el('an_narr_list'); 
           ul.innerHTML = '';
@@ -810,8 +992,36 @@
        ****************************************************/
       activateTiles(['ask']); // ensure Ask open with JS-driven height
     </script>
+    <!-- Processing Modal -->
+    <div id="taskModal" aria-hidden="true">
+      <div class="task-backdrop"></div>
+      <div class="task-panel" role="dialog" aria-modal="true" aria-labelledby="taskTitle">
+        <div class="task-header">
+          <div class="task-spinner" aria-hidden="true"></div>
+          <h3 id="taskTitle">Working…</h3>
+        </div>
+    
+        <div class="task-body">
+          <div class="task-percent" id="taskPercent">0%</div>
+    
+          <!-- Determinate bar -->
+          <div class="task-progress" id="taskProgress">
+            <div class="task-progress-fill" id="taskProgressFill" style="width:0%"></div>
+          </div>
+    
+          <!-- Indeterminate bar (shown when needed) -->
+          <div class="task-progress task-progress-indeterminate" id="taskIndeterminate" hidden>
+            <div class="task-progress-anim"></div>
+          </div>
+    
+          <div class="task-sub" id="taskSub">Please wait…</div>
+        </div>
+      </div>
+    </div>
+
   </body>
 </html>
+
 
 
 
