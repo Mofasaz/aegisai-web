@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Tuple
 from api.models import LogEvent, Anomaly
-import yaml, re, threading, hashlib
+import yaml, re, threading, hashlib, os
 from datetime import datetime
 
 # Global cache + lock
@@ -143,7 +143,7 @@ def policy_sanity_check(new_rule: Dict[str, Any], role: str | None) -> Tuple[Lis
 
 
 # Optional: stronger (LLM) check—off by default
-ENABLE_LLM_POLICY_CHECK = False
+ENABLE_LLM_POLICY_CHECK = os.getenv("ENABLE_LLM_POLICY_CHECK", "true").lower() == "true"
 
 def llm_policy_conflict_check(rule_yaml: str, clauses: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
     """
@@ -284,6 +284,7 @@ def analyze_events(events: List[Dict[str, Any]]):
                 "explain": "Matched rules: " + ", ".join(matched_signals),
             })
     return anomalies
+
 
 
 
