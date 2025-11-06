@@ -31,6 +31,10 @@ USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
 RULES_FILE = os.getenv("RULES_FILE", "rules/rules.yaml")
 ENABLE_LLM_POLICY_CHECK = os.getenv("ENABLE_LLM_POLICY_CHECK", "true").lower() == "true"
 
+# --- Violation judge helpers ---
+LOW_SIGNAL_WORDS = {"success"}  # "success" alone rarely implies a violation
+DENY_WORDS  = ("block", "failed", "failure", "timeout", "unsafe", "risk", "data_delete", "data_export", "access_denied", "unauthorized","forbid", "forbidden", "prohibit", "prohibited", "deny", "blocked", "not allowed")
+
 logger = logging.getLogger("aegisai.analyze")
 if not logger.handlers:
     handler = logging.StreamHandler()
@@ -336,6 +340,86 @@ def _policy_sanity_check(new_rule: Dict[str, Any], role: str | None) -> Tuple[Li
 
     return list(dict.fromkeys(errs)), list(dict.fromkeys(warns))
 
+
+def _is_potentially_risky(ev: LogEvent, risk_score: int | None, signals: list[str]) -> bool:
+    """
+    Fast pass: return True only if the event is *worth* deeper judgment.
+    """
+    if (risk_score or 0) >= 60:
+        return True
+    a = (ev.action or "").lower()
+    s = (ev.status or "").lower()
+    if a in RISKY_ACTIONS and s != "success":
+        return True
+    # obvious non-risky: everything is success and no suspicious signals
+    if s == "success" and not signals:
+        return False
+    # if success but suspicious action (e.g., data_delete) — still check
+    if s == "success" and a in {"data_delete", "data_export"}:
+        return True
+    # fallback: moderate risk score threshold
+    return (risk_score or 0) >= 40
+
+
+def _llm_violation_judge(ev: LogEvent, clause_snippets: list[str]) -> dict:
+    """
+    Ask the LLM: is this a policy violation? Returns a dict:
+      { "violation": bool, "reason": str, "remediation": list[str] }
+    Uses your chat model (NOT the embedding model).
+    """
+    from openai import AzureOpenAI
+
+    client = AzureOpenAI(
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
+    )
+    gpt_deployment = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT")
+
+    # Keep the prompt short, grounded, and force JSON
+    policy_context = "\n\n".join(
+        f"- CLAUSE #{i+1}:\n{c.strip()}" for i, c in enumerate(clause_snippets[:4]) if c
+    ) or "No matching clauses."
+
+    ev_text = (
+        f"event_id={ev.event_id}, role={ev.user_role}, action={ev.action}, status={ev.status}, "
+        f"system={ev.system}, location={ev.location}, timestamp={ev.timestamp}"
+    )
+
+    sys = (
+        "You are a strict policy compliance judge. Decide if the event violates any given policy clauses. "
+        "If not a violation, return violation=false and an empty remediation list."
+    )
+    usr = f"""EVENT:
+{ev_text}
+
+POLICY CLAUSES:
+{policy_context}
+
+Return strict JSON with keys: violation (bool), reason (string max 200 chars),
+remediation (list of 1-4 short imperative steps; empty if no violation)."""
+
+    resp = client.chat.completions.create(
+        model=gpt_deployment,
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role":"system","content": sys},
+            {"role":"user","content": usr}
+        ],
+    )
+    try:
+        import json
+        data = json.loads(resp.choices[0].message.content)
+        # ensure shape
+        return {
+            "violation": bool(data.get("violation", False)),
+            "reason": str(data.get("reason", "")).strip(),
+            "remediation": [str(x).strip() for x in (data.get("remediation") or []) if str(x).strip()][:4],
+        }
+    except Exception:
+        # fail-safe: treat as non-violation
+        return {"violation": False, "reason": "Judge unavailable", "remediation": []}
 
 def _to_dt_loose(v: Optional[str | datetime]) -> Optional[datetime]:
     if v is None:
@@ -790,21 +874,67 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
             chunks = get_chunks_vector(q, ev.user_role or "", top=3, k=20, hybrid=True)
         else:
             chunks = get_chunks(q, ev.user_role or "")[:3]
-        policy_refs = [LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"], clause_text=c["clause_text"], title=c["title"], section=c["section"]) for c in chunks]
 
+        clause_snippets = []
+        policy_refs = []
+        for c in (chunks or []):
+            policy_refs.append(LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"], clause_text=c["clause_text"], title=c["title"], section=c["section"]))
+            txt = (c.get("clause_text") or "").strip()
+            if txt:
+                clause_snippets.append(txt)
+
+        # Decide if we should judge at all
+        risky = _is_potentially_risky(ev, getattr(it, "risk_score", None), getattr(it, "signals", []) or [])
+
+        violation = False
+        reason = ""
+        remediation: list[str] = []
+
+        if risky and clause_snippets:
+            verdict = _llm_violation_judge(ev, clause_snippets)
+            violation = bool(verdict.get("violation"))
+            reason = (verdict.get("reason") or "").strip()
+            remediation = verdict.get("remediation") or []
+
+        # Narrative text (include short clause extract so UI shows the actual rule line)
+        def _short(s, n=220):
+            return (s[:n] + "…") if s and len(s) > n else (s or "")
+
+        clause_excerpt = _short(" | ".join(clause_snippets)) if clause_snippets else "No matching clause text."
+
+        if violation:
+            story = (
+                f"⚠️ Potential violation detected: {ev.user_role or 'User'} performed {ev.action} "
+                f"on {ev.system or 'system'} at {ev.location or 'N/A'}. "
+                f"{('Reason: ' + reason) if reason else ''} "
+                f"\nClause: {clause_excerpt}"
+            )
+        else:
+            story = (
+                f"✓ No violation: {ev.user_role or 'User'} performed {ev.action} "
+                f"on {ev.system or 'system'} at {ev.location or 'N/A'}. "
+                f"{('Reason: ' + reason) if reason else 'Within policy / insufficient risk signals.'} "
+                f"\nClause: {clause_excerpt}"
+            )
+            remediation = []  # ensure empty for no-violation
+
+        """
         story = (
             f"{ev.user_role or 'User'} in {ev.location or 'N/A'} performed {ev.action} "
             f"on {ev.system or 'system'}. Signals: {', '.join(it.signals)}. "
             f"Linked policies: " + ", ".join([f"{p.policy_id}/{p.clause_id}" for p in policy_refs]) if policy_refs else "Linked policies: none."
         )
+        """
+        
         #rem = ["Notify line manager", "Quarantine/reverse if possible", "Schedule targeted policy refresher"]
         # ——— LLM remediation grounded in citations ———
+        """
         rem = llm_remediation_from_context(ev, policy_refs)
         
         items.append(NarrativeItem(
             event_id=ev.event_id, narrative=story, remediation=rem, linked_policies=policy_refs
         ))
-
+        """
     return NarrativeResponse(items=items)
     
 @app.post("/attest", response_model=AttestResponse)
@@ -836,6 +966,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
