@@ -311,7 +311,8 @@ def _policy_sanity_check(new_rule: Dict[str, Any], role: str | None) -> Tuple[Li
 
     if USE_VECTOR and callable(get_chunks_vector):
         clauses = get_chunks_vector(q, role or "", top=8, k=40, hybrid=True)
-    clauses = get_chunks(q, role or "")[:8]
+    else:
+        clauses = get_chunks(q, role or "")[:8]
     
     if not clauses:
         warns.append("No related policies found for this scope; please review.")
@@ -367,14 +368,12 @@ def _llm_violation_judge(ev: LogEvent, clause_snippets: list[str]) -> dict:
       { "violation": bool, "reason": str, "remediation": list[str] }
     Uses your chat model (NOT the embedding model).
     """
-    from openai import AzureOpenAI
-
     client = AzureOpenAI(
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
     )
-    gpt_deployment = os.getenv("AZURE_OPENAI_CHAT_DEPLOYMENT")
+    gpt_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
     # Keep the prompt short, grounded, and force JSON
     policy_context = "\n\n".join(
@@ -588,7 +587,8 @@ def suggest_rule(req: RuleSuggestRequest, user: UserPrincipal = Depends(require_
         q = " ".join(filter(None, [parsed.get("action"), parsed.get("system"), parsed.get("resource"), parsed.get("category")]))
         if USE_VECTOR and callable(get_chunks_vector):
             clauses = get_chunks_vector(q, role_for_query or "", top=8, k=40, hybrid=True)
-        clauses = get_chunks(q, role_for_query or "")[:8]
+        else:
+            clauses = get_chunks(q, role_for_query or "")[:8]
         
         rule_yaml_for_llm = yaml.safe_dump(parsed, sort_keys=False, allow_unicode=True)
         le, lw = llm_policy_conflict_check(rule_yaml_for_llm, clauses)
@@ -966,6 +966,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
