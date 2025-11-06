@@ -458,7 +458,9 @@ Guidelines:
         # --- Also expose "lines" parsed like your remediation helper (for UI reuse) ---
         # If violation=False → lines = []
         lines = remediation[:] if violation else []
-
+        logger.info(
+            f"violation: {violation} | reason: {reason} | remediation: {remediation} | lines: {lines}"
+        )
         return {
             "violation": violation,
             "reason": reason,
@@ -1024,6 +1026,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
