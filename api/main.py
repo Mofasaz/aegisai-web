@@ -937,9 +937,6 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
         policy_refs = []
         for c in (chunks or []):
             policy_refs.append(LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"], clause_text=c["clause_text"], title=c["title"], section=c["section"]))
-            txt = (c.get("clause_text") or "").strip()
-            if txt:
-                clause_snippets.append(txt)
 
         # Decide if we should judge at all
         risky = _is_potentially_risky(ev, getattr(it, "risk_score", None), getattr(it, "signals", []) or [])
@@ -1027,6 +1024,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
