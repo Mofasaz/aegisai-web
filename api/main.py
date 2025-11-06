@@ -29,6 +29,7 @@ except Exception:
 app = FastAPI(title="AegisAI", docs_url="/docs", redoc_url="/redoc")
 USE_VECTOR = os.getenv("USE_VECTOR", "true").lower() == "true"
 RULES_FILE = os.getenv("RULES_FILE", "rules/rules.yaml")
+ENABLE_LLM_POLICY_CHECK = os.getenv("ENABLE_LLM_POLICY_CHECK", "true").lower() == "true"
 
 logger = logging.getLogger("aegisai.analyze")
 if not logger.handlers:
@@ -293,6 +294,49 @@ def _llm_rule_yaml_from_prompt(prompt: str, category: Optional[str], severity: O
     out = llm.invoke([sys, user])
     return getattr(out, "content", str(out)).strip()
 
+def _policy_sanity_check(new_rule: Dict[str, Any], role: str | None) -> Tuple[List[str], List[str]]:
+    """
+    Deterministic (no LLM) sanity pass: if nearby clauses strongly 'permit' something
+    the rule tries to 'deny', raise a warning/error. Vice-versa too.
+    """
+    errs, warns = [], []
+    q_terms = [new_rule.get("action"), new_rule.get("system"), new_rule.get("resource"), new_rule.get("category")]
+    q = " ".join([t for t in q_terms if t]).strip()
+    if not q:
+        return errs, warns
+
+    if USE_VECTOR and callable(get_chunks_vector):
+        clauses = get_chunks_vector(q, role or "", top=8, k=40, hybrid=True)
+    clauses = get_chunks(q, role or "")[:8]
+    
+    if not clauses:
+        warns.append("No related policies found for this scope; please review.")
+        return errs, list(dict.fromkeys(warns))
+
+    # compress clauses text
+    texts = []
+    for c in clauses:
+        txt = (c.get("clause_text") or c.get("content") or "").strip()
+        if txt:
+            texts.append(txt.lower())
+
+    combined = " \n".join(texts)
+    rule_text = " ".join(str(new_rule.get(k, "")) for k in ("effect", "decision", "severity", "action_on_violation", "description")).lower()
+
+    policy_allows = any(w in combined for w in ALLOW_WORDS)
+    policy_denies  = any(w in combined for w in DENY_WORDS)
+
+    rule_is_denyish  = any(w in rule_text for w in DENY_WORDS) or ("high" in rule_text and "block" in rule_text)
+    rule_is_allowish = any(w in rule_text for w in ALLOW_WORDS) or ("log only" in rule_text)
+
+    if policy_allows and rule_is_denyish:
+        errs.append("Policy clauses appear to permit this behavior, but the suggested rule would deny/block it.")
+    if policy_denies and rule_is_allowish:
+        warns.append("Policy clauses appear to prohibit this behavior, but the suggested rule is weak (allow/log). Consider raising severity.")
+
+    return list(dict.fromkeys(errs)), list(dict.fromkeys(warns))
+
+
 def _to_dt_loose(v: Optional[str | datetime]) -> Optional[datetime]:
     if v is None:
         return None
@@ -451,7 +495,7 @@ def suggest_rule(req: RuleSuggestRequest, user: UserPrincipal = Depends(require_
 
     # Rule vs policy clauses: deterministic sanity
     role_for_query = parsed.get("role")
-    pol_errs, pol_warns = policy_sanity_check(parsed, role_for_query)
+    pol_errs, pol_warns = _policy_sanity_check(parsed, role_for_query)
 
     # Optional LLM gate (secondary)
     llm_errs, llm_warns = [], []
@@ -792,6 +836,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
