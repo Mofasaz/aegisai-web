@@ -945,7 +945,7 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
         reason = ""
         remediation: list[str] = []
 
-        if risky and clause_snippets:
+        if risky and policy_refs:
             verdict = _llm_violation_judge(ev, policy_refs)
             violation = verdict["violation"]
             reason = verdict["reason"]
@@ -1024,6 +1024,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
