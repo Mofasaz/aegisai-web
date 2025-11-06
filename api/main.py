@@ -361,64 +361,123 @@ def _is_potentially_risky(ev: LogEvent, risk_score: int | None, signals: list[st
     # fallback: moderate risk score threshold
     return (risk_score or 0) >= 40
 
+def _llm_violation_judge(ev: "LogEvent", policy_refs: list["LinkedPolicy"]) -> dict:
+    """
+    Policy-aware violation judge.
+    Accepts policy_refs (with clause_text/title/section if available).
+    Returns:
+      {
+        "violation": bool,
+        "reason": str,
+        "remediation": [str],   # only when violation=True; else []
+        "lines": [str],         # bullet lines parsed from model text (like llm_remediation_from_context)
+      }
+    """
 
-def _llm_violation_judge(ev: LogEvent, clause_snippets: list[str]) -> dict:
-    """
-    Ask the LLM: is this a policy violation? Returns a dict:
-      { "violation": bool, "reason": str, "remediation": list[str] }
-    Uses your chat model (NOT the embedding model).
-    """
+    # --- Build policy context from LinkedPolicy (same flavor as your remediation helper) ---
+    def _mk_policy_context(refs: list["LinkedPolicy"]) -> str:
+        blocks = []
+        for p in refs or []:
+            # tolerate both attr- and dict-style
+            pid = getattr(p, "policy_id", None) or (p.get("policy_id") if isinstance(p, dict) else None)
+            cid = getattr(p, "clause_id", None) or (p.get("clause_id") if isinstance(p, dict) else None)
+            title = getattr(p, "title", None) or (p.get("title") if isinstance(p, dict) else None)
+            section = getattr(p, "section", None) or (p.get("section") if isinstance(p, dict) else None)
+            clause_text = getattr(p, "clause_text", None) or (p.get("clause_text") if isinstance(p, dict) else None)
+
+            if not clause_text:
+                # skip empty blocks (judge still works with others)
+                continue
+
+            label = f"[{pid}/{cid}]" if (pid and cid) else "[—/—]"
+            t = f" — {title}" if title else ""
+            s = f" — {section}" if section else ""
+            blocks.append(f"{label}{t}{s}\n{clause_text.strip()}")
+        return "\n\n---\n\n".join(blocks) if blocks else "No matching clauses."
+
+    policy_context = _mk_policy_context(policy_refs)
+
+    ev_line = (
+        f"event_id={ev.event_id}, role={ev.user_role}, action={ev.action}, status={ev.status}, "
+        f"system={ev.system}, location={ev.location}, timestamp={ev.timestamp}"
+    )
+
+    system_msg = (
+        "You are a strict policy compliance judge. Decide if the event violates the given clauses. "
+        "Be conservative; if unclear, return violation=false. "
+        "Only propose remediation when violation=true."
+    )
+
+    user_msg = f"""EVENT:
+{ev_line}
+
+POLICY CLAUSES:
+{policy_context}
+
+OUTPUT FORMAT (strict JSON):
+{{
+  "violation": <bool>,
+  "reason": "<<=200 chars>",
+  "remediation": ["<step1>", "<step2>", "..."]   // 0–4 items; empty list if no violation
+}}
+
+Guidelines:
+- Ground decisions in the clause text. If clauses do not support a breach, set violation=false.
+- Keep reason concise (<=200 chars).
+- Remediation steps must be concrete, imperative, and low-risk first (contain who/what/when if possible).
+- If violation=false, remediation MUST be an empty list.
+"""
+
     client = AzureOpenAI(
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),
         azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
         api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
     )
+    # Use your chat model deployment (NOT embeddings)
     gpt_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 
-    # Keep the prompt short, grounded, and force JSON
-    policy_context = "\n\n".join(
-        f"- CLAUSE #{i+1}:\n{c.strip()}" for i, c in enumerate(clause_snippets[:4]) if c
-    ) or "No matching clauses."
-
-    ev_text = (
-        f"event_id={ev.event_id}, role={ev.user_role}, action={ev.action}, status={ev.status}, "
-        f"system={ev.system}, location={ev.location}, timestamp={ev.timestamp}"
-    )
-
-    sys = (
-        "You are a strict policy compliance judge. Decide if the event violates any given policy clauses. "
-        "If not a violation, return violation=false and an empty remediation list."
-    )
-    usr = f"""EVENT:
-{ev_text}
-
-POLICY CLAUSES:
-{policy_context}
-
-Return strict JSON with keys: violation (bool), reason (string max 200 chars),
-remediation (list of 1-4 short imperative steps; empty if no violation)."""
-
-    resp = client.chat.completions.create(
-        model=gpt_deployment,
-        temperature=0,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role":"system","content": sys},
-            {"role":"user","content": usr}
-        ],
-    )
     try:
-        import json
+        resp = client.chat.completions.create(
+            model=gpt_deployment,
+            temperature=0,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+        )
         data = json.loads(resp.choices[0].message.content)
-        # ensure shape
+        violation = bool(data.get("violation", False))
+        reason = str(data.get("reason", "")).strip()
+
+        # Pull remediation raw (ensure list[str]), but enforce empty when not a violation
+        raw_rem = data.get("remediation") or []
+        rem_list = [str(x).strip() for x in raw_rem if str(x).strip()]
+        remediation = rem_list[:4] if violation else []
+
+        # --- Also expose "lines" parsed like your remediation helper (for UI reuse) ---
+        # If violation=False → lines = []
+        lines = remediation[:] if violation else []
+
         return {
-            "violation": bool(data.get("violation", False)),
-            "reason": str(data.get("reason", "")).strip(),
-            "remediation": [str(x).strip() for x in (data.get("remediation") or []) if str(x).strip()][:4],
+            "violation": violation,
+            "reason": reason,
+            "remediation": remediation,
+            "lines": lines,
         }
-    except Exception:
-        # fail-safe: treat as non-violation
-        return {"violation": False, "reason": "Judge unavailable", "remediation": []}
+
+    except Exception as e:
+        # Fail-safe: non-violation, no remediation
+        # (keeps UI clean; avoids recommending action without certainty)
+        logger.info(
+            f"_llm_violation_judge failed | error={e}"
+        )
+        return {
+            "violation": False,
+            "reason": f"Judge unavailable ({type(e).__name__})",
+            "remediation": [],
+            "lines": ["Notify line manager", "Reverse/quarantine action if possible", "Schedule targeted policy refresher"],
+        }
 
 def _to_dt_loose(v: Optional[str | datetime]) -> Optional[datetime]:
     if v is None:
@@ -875,7 +934,6 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
         else:
             chunks = get_chunks(q, ev.user_role or "")[:3]
 
-        clause_snippets = []
         policy_refs = []
         for c in (chunks or []):
             policy_refs.append(LinkedPolicy(policy_id=c["policy_id"], clause_id=c["clause_id"], clause_text=c["clause_text"], title=c["title"], section=c["section"]))
@@ -891,30 +949,33 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
         remediation: list[str] = []
 
         if risky and clause_snippets:
-            verdict = _llm_violation_judge(ev, clause_snippets)
-            violation = bool(verdict.get("violation"))
-            reason = (verdict.get("reason") or "").strip()
-            remediation = verdict.get("remediation") or []
+            verdict = _llm_violation_judge(ev, policy_refs)
+            violation = verdict["violation"]
+            reason = verdict["reason"]
+            remediation = verdict["remediation"]
+            lines = verdict["lines"]
 
         # Narrative text (include short clause extract so UI shows the actual rule line)
+        """
         def _short(s, n=220):
             return (s[:n] + "…") if s and len(s) > n else (s or "")
 
         clause_excerpt = _short(" | ".join(clause_snippets)) if clause_snippets else "No matching clause text."
-
+        """
+        
         if violation:
             story = (
                 f"⚠️ Potential violation detected: {ev.user_role or 'User'} performed {ev.action} "
                 f"on {ev.system or 'system'} at {ev.location or 'N/A'}. "
                 f"{('Reason: ' + reason) if reason else ''} "
-                f"\nClause: {clause_excerpt}"
+                f"Linked policies: " + ", ".join([f"{p.policy_id}/{p.clause_id}" for p in policy_refs]) if policy_refs else "Linked policies: none."
             )
         else:
             story = (
                 f"✓ No violation: {ev.user_role or 'User'} performed {ev.action} "
                 f"on {ev.system or 'system'} at {ev.location or 'N/A'}. "
                 f"{('Reason: ' + reason) if reason else 'Within policy / insufficient risk signals.'} "
-                f"\nClause: {clause_excerpt}"
+                f"Linked policies: " + ", ".join([f"{p.policy_id}/{p.clause_id}" for p in policy_refs]) if policy_refs else "Linked policies: none."
             )
             remediation = []  # ensure empty for no-violation
 
@@ -930,11 +991,11 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
         # ——— LLM remediation grounded in citations ———
         """
         rem = llm_remediation_from_context(ev, policy_refs)
-        
+        """
         items.append(NarrativeItem(
             event_id=ev.event_id, narrative=story, remediation=rem, linked_policies=policy_refs
         ))
-        """
+        
     return NarrativeResponse(items=items)
     
 @app.post("/attest", response_model=AttestResponse)
@@ -966,6 +1027,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
