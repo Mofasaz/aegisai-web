@@ -488,7 +488,32 @@
         </section>
       </div>
     </div>
-
+    <!-- Processing Modal -->
+    <div id="taskModal" aria-hidden="true">
+      <div class="task-backdrop"></div>
+      <div class="task-panel" role="dialog" aria-modal="true" aria-labelledby="taskTitle">
+        <div class="task-header">
+          <div class="task-spinner" aria-hidden="true"></div>
+          <h3 id="taskTitle">Working…</h3>
+        </div>
+    
+        <div class="task-body">
+          <div class="task-percent" id="taskPercent">0%</div>
+    
+          <!-- Determinate bar -->
+          <div class="task-progress" id="taskProgress">
+            <div class="task-progress-fill" id="taskProgressFill" style="width:0%"></div>
+          </div>
+    
+          <!-- Indeterminate bar (shown when needed) -->
+          <div class="task-progress task-progress-indeterminate" id="taskIndeterminate" hidden>
+            <div class="task-progress-anim"></div>
+          </div>
+    
+          <div class="task-sub" id="taskSub">Please wait…</div>
+        </div>
+      </div>
+    </div>
     <script>
       /****************************************************
        *  GLOBALS
@@ -992,35 +1017,9 @@
        ****************************************************/
       activateTiles(['ask']); // ensure Ask open with JS-driven height
     </script>
-    <!-- Processing Modal -->
-    <div id="taskModal" aria-hidden="true">
-      <div class="task-backdrop"></div>
-      <div class="task-panel" role="dialog" aria-modal="true" aria-labelledby="taskTitle">
-        <div class="task-header">
-          <div class="task-spinner" aria-hidden="true"></div>
-          <h3 id="taskTitle">Working…</h3>
-        </div>
-    
-        <div class="task-body">
-          <div class="task-percent" id="taskPercent">0%</div>
-    
-          <!-- Determinate bar -->
-          <div class="task-progress" id="taskProgress">
-            <div class="task-progress-fill" id="taskProgressFill" style="width:0%"></div>
-          </div>
-    
-          <!-- Indeterminate bar (shown when needed) -->
-          <div class="task-progress task-progress-indeterminate" id="taskIndeterminate" hidden>
-            <div class="task-progress-anim"></div>
-          </div>
-    
-          <div class="task-sub" id="taskSub">Please wait…</div>
-        </div>
-      </div>
-    </div>
-
   </body>
 </html>
+
 
 
 
