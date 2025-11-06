@@ -943,13 +943,13 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
 
         violation = False
         reason = ""
-        remediation: list[str] = []
+        rem: list[str] = []
 
         if risky and policy_refs:
             verdict = _llm_violation_judge(ev, policy_refs)
             violation = verdict["violation"]
             reason = verdict["reason"]
-            remediation = verdict["remediation"]
+            rem = verdict["remediation"]
             lines = verdict["lines"]
 
         # Narrative text (include short clause extract so UI shows the actual rule line)
@@ -974,7 +974,7 @@ def narrative_from_anomalies(req: NarrativeFromAnomaliesRequest):
                 f"{('Reason: ' + reason) if reason else 'Within policy / insufficient risk signals.'} "
                 f"Linked policies: " + ", ".join([f"{p.policy_id}/{p.clause_id}" for p in policy_refs]) if policy_refs else "Linked policies: none."
             )
-            remediation = []  # ensure empty for no-violation
+            rem = []  # ensure empty for no-violation
 
         """
         story = (
@@ -1024,6 +1024,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
