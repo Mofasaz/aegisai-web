@@ -102,46 +102,6 @@ def validate_against_existing(new_rule: Dict[str, Any], existing_rules: List[Dic
     return errs, warns
 
 
-def policy_sanity_check(new_rule: Dict[str, Any], role: str | None) -> Tuple[List[str], List[str]]:
-    """
-    Deterministic (no LLM) sanity pass: if nearby clauses strongly 'permit' something
-    the rule tries to 'deny', raise a warning/error. Vice-versa too.
-    """
-    errs, warns = [], []
-    q_terms = [new_rule.get("action"), new_rule.get("system"), new_rule.get("resource"), new_rule.get("category")]
-    q = " ".join([t for t in q_terms if t]).strip()
-    if not q:
-        return errs, warns
-
-    clauses = _load_policy_clauses_for_query(q, role)
-    if not clauses:
-        warns.append("No related policies found for this scope; please review.")
-        return errs, list(dict.fromkeys(warns))
-
-    # compress clauses text
-    texts = []
-    for c in clauses:
-        txt = (c.get("clause_text") or c.get("content") or "").strip()
-        if txt:
-            texts.append(txt.lower())
-
-    combined = " \n".join(texts)
-    rule_text = " ".join(str(new_rule.get(k, "")) for k in ("effect", "decision", "severity", "action_on_violation", "description")).lower()
-
-    policy_allows = any(w in combined for w in ALLOW_WORDS)
-    policy_denies  = any(w in combined for w in DENY_WORDS)
-
-    rule_is_denyish  = any(w in rule_text for w in DENY_WORDS) or ("high" in rule_text and "block" in rule_text)
-    rule_is_allowish = any(w in rule_text for w in ALLOW_WORDS) or ("log only" in rule_text)
-
-    if policy_allows and rule_is_denyish:
-        errs.append("Policy clauses appear to permit this behavior, but the suggested rule would deny/block it.")
-    if policy_denies and rule_is_allowish:
-        warns.append("Policy clauses appear to prohibit this behavior, but the suggested rule is weak (allow/log). Consider raising severity.")
-
-    return list(dict.fromkeys(errs)), list(dict.fromkeys(warns))
-
-
 # Optional: stronger (LLM) check—off by default
 ENABLE_LLM_POLICY_CHECK = os.getenv("ENABLE_LLM_POLICY_CHECK", "true").lower() == "true"
 
@@ -284,6 +244,7 @@ def analyze_events(events: List[Dict[str, Any]]):
                 "explain": "Matched rules: " + ", ".join(matched_signals),
             })
     return anomalies
+
 
 
 
