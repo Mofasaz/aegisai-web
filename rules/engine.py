@@ -10,7 +10,7 @@ ALLOW_WORDS = ("permit", "permitted", "allowed", "allow", "authorised", "authori
 DENY_WORDS  = ("forbid", "forbidden", "prohibit", "prohibited", "deny", "blocked", "not allowed")
 
 
-def _normalize_rule_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_rule_dict(d: Dict[str, Any]) -> Dict[str, Any]:
     """Light canonicalization so comparisons are stable."""
     out = dict(d)
     # Normalize strings
@@ -81,7 +81,7 @@ def _contradict_rule(existing: Dict[str, Any], new: Dict[str, Any]) -> bool:
     return same_scope and { _effect(existing), _effect(new) } == {"allow", "deny"}
 
 
-def _validate_against_existing(new_rule: Dict[str, Any], existing_rules: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
+def validate_against_existing(new_rule: Dict[str, Any], existing_rules: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
     """
     Returns (errors, warnings) about duplicates or conflicts vs. existing rules.
     """
@@ -102,7 +102,7 @@ def _validate_against_existing(new_rule: Dict[str, Any], existing_rules: List[Di
     return errs, warns
 
 
-def _policy_sanity_check(new_rule: Dict[str, Any], role: str | None) -> Tuple[List[str], List[str]]:
+def policy_sanity_check(new_rule: Dict[str, Any], role: str | None) -> Tuple[List[str], List[str]]:
     """
     Deterministic (no LLM) sanity pass: if nearby clauses strongly 'permit' something
     the rule tries to 'deny', raise a warning/error. Vice-versa too.
@@ -145,7 +145,7 @@ def _policy_sanity_check(new_rule: Dict[str, Any], role: str | None) -> Tuple[Li
 # Optional: stronger (LLM) check—off by default
 ENABLE_LLM_POLICY_CHECK = False
 
-def _llm_policy_conflict_check(rule_yaml: str, clauses: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
+def llm_policy_conflict_check(rule_yaml: str, clauses: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
     """
     If you want a secondary LLM gate. Returns (errors, warnings).
     """
@@ -284,6 +284,7 @@ def analyze_events(events: List[Dict[str, Any]]):
                 "explain": "Matched rules: " + ", ".join(matched_signals),
             })
     return anomalies
+
 
 
 
