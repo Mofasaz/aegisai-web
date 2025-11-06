@@ -275,6 +275,21 @@
         word-break: break-word;
       }
 
+      /* Wrap YAML/JSON code blocks cleanly */
+      #rulePreview,
+      #raw,
+      .code-pre {
+        white-space: pre-wrap;      /* allow soft-wrapping in <pre> */
+        overflow-wrap: anywhere;    /* wrap long tokens/words */
+        word-break: break-word;     /* extra safety for long strings */
+        max-height: 260px;          /* keep it compact */
+        overflow-y: auto;           /* vertical scroll if needed */
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      
+      /* Prevent any horizontal bleed from the container */
+      .card { overflow: hidden; }
+
     </style>
   </head>
 
@@ -326,7 +341,7 @@
             </div>
             <div class="card">
               <div class="small" style="margin-bottom:6px;">Suggested YAML</div>
-              <pre id="rulePreview" style="min-height:96px;"></pre>
+              <pre id="rulePreview" class="code-pre" style="min-height:96px;"></pre>
             </div>
           </div>
         </section>
@@ -797,6 +812,7 @@
     </script>
   </body>
 </html>
+
 
 
 
