@@ -404,8 +404,8 @@ def _llm_violation_judge(ev: "LogEvent", policy_refs: list["LinkedPolicy"]) -> d
 
     system_msg = (
         "You are a strict policy compliance judge. Decide if the event violates the given clauses. "
-        "Be conservative; if unclear, return violation=false. "
-        "Only propose remediation when violation=true."
+        "Compare the event against the policy citations Decide if the event violates the given clauses. "
+        "Only propose 3–5 specific, actionable remediation steps when violation=true."
     )
 
     user_msg = f"""EVENT:
@@ -1026,6 +1026,7 @@ else:
         return JSONResponse({"status": "ok", "note": "public/ not found; visit /docs"})
 
  
+
 
 
 
