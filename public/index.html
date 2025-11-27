@@ -30,7 +30,7 @@
       html, body { height: 100%; margin: 0; padding: 0; }
 
       body {
-        background: var(--bg);
+        background: radial-gradient(1200px 800px at 20% -10%, #1a2650 0%, #0b1020 55%);
         color: var(--text);
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
         font-size: 14px;
@@ -107,7 +107,7 @@
       input, textarea, button {
         border-radius: 12px; border: 1px solid var(--ring); outline: none; transition: all .2s ease; font-family: inherit;
       }
-      input, textarea { width: 100%; padding: 10px 12px; background: #fff; color: var(--text); }
+      input, textarea { width: 100%; padding: 10px 12px; background: #fff; color: var(--text); border-block-color: lightblue; }
       input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(25,118,210,.2); }
       button {
         background: linear-gradient(135deg, var(--accent), #4ea1ff);
@@ -1019,6 +1019,7 @@
     </script>
   </body>
 </html>
+
 
 
 
